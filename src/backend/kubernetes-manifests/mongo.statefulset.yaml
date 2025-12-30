@@ -1,6 +1,36 @@
 ################################################################################
-# MongoDB StatefulSet with persistent storage
-# This replaces the Deployment for production-ready persistent storage
+# MongoDB StatefulSet with Persistent Storage
+#
+# Motivation:
+# The original MongoDB deployment used a Deployment with ephemeral storage, causing
+# data loss on pod restarts. This addresses the limitation in PROJECT_OVERVIEW.md and
+# follows recommendations from KUBERNETES_ARCHITECTURE.md for production-ready storage.
+#
+# Approach:
+# - Replaces Deployment with StatefulSet for stateful application requirements
+# - Uses volumeClaimTemplates for automatic PVC creation per pod
+# - Implements health checks (liveness and readiness probes)
+# - Adds resource limits and requests for better resource management
+# - Provides stable network identity and ordered deployment
+#
+# Why StatefulSet over Deployment:
+# - StatefulSets provide stable network identities (predictable DNS names)
+# - Ordered deployment and scaling (important for databases)
+# - Stable persistent storage per pod
+# - Better suited for stateful applications like databases
+#
+# Benefits:
+# - Data persistence across pod restarts and deployments
+# - Stable network identity for reliable service discovery
+# - Production-ready database deployment pattern
+# - Better resource management with limits and requests
+# - Health checks ensure database availability
+#
+# Migration Note:
+# When migrating from Deployment to StatefulSet, you may need to:
+# 1. Delete the old Deployment
+# 2. Apply the StatefulSet
+# 3. Ensure the service is configured as headless (clusterIP: None)
 ################################################################################
 apiVersion: apps/v1
 kind: StatefulSet

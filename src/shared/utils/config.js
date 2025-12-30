@@ -1,6 +1,28 @@
 /**
- * Configuration management utility
- * Validates and provides access to environment variables
+ * Configuration Management Utility
+ * 
+ * Motivation:
+ * The original codebase had environment variable checks scattered throughout the code,
+ * with inconsistent error handling. This module centralizes configuration management
+ * and provides type-safe access to environment variables.
+ * 
+ * Approach:
+ * - Validates required environment variables at application startup
+ * - Provides typed getters for configuration values
+ * - Centralizes all configuration logic in one place (DRY principle)
+ * - Fails fast with clear error messages if required config is missing
+ * - Supports different environments (development, production)
+ * 
+ * Benefits:
+ * - Single source of truth for configuration
+ * - Early detection of configuration issues
+ * - Type-safe configuration access
+ * - Easier to test and mock
+ * - Better separation of concerns
+ * 
+ * Usage:
+ * Import this module to access configuration values instead of directly accessing
+ * process.env throughout the codebase.
  */
 
 const logger = require('./logger');

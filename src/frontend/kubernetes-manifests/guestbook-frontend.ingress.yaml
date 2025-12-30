@@ -1,3 +1,37 @@
+################################################################################
+# Guestbook Ingress Resource
+#
+# Motivation:
+# The original frontend service used LoadBalancer type, which creates a cloud load
+# balancer per service. This is costly and not scalable. This addresses the
+# recommendation from KUBERNETES_ARCHITECTURE.md: "Consider using Ingress instead of
+# LoadBalancer for production".
+#
+# Approach:
+# - Replaces LoadBalancer with Ingress for external access
+# - Uses path-based routing (can be extended for multiple services)
+# - Configures host-based routing (guestbook.local for local, domain for production)
+# - Includes annotations for SSL/TLS termination (commented for reference)
+# - More cost-effective: one load balancer for multiple services
+#
+# Benefits:
+# - Cost reduction: single load balancer instead of one per service
+# - SSL/TLS termination at ingress level
+# - Path-based and host-based routing capabilities
+# - Better suited for production environments
+# - Easier to manage multiple services behind one entry point
+#
+# Production Setup:
+# 1. Install an Ingress Controller (e.g., NGINX Ingress Controller)
+# 2. Update the host to your production domain
+# 3. Uncomment and configure TLS section for SSL/TLS
+# 4. Configure cert-manager for automatic certificate management
+# 5. Update annotations based on your ingress controller
+#
+# Local Development:
+# For local development with Minikube, use: minikube addons enable ingress
+# Then access via: http://guestbook.local (add to /etc/hosts)
+################################################################################
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
