@@ -6,9 +6,11 @@ metadata:
     tier: db
   name: nodejs-guestbook-mongodb
 spec:
+  clusterIP: None  # Headless service for StatefulSet
   ports:
     - port: 27017
       targetPort: 27017
+      name: mongodb
   selector:
     app: nodejs-guestbook
     tier: db

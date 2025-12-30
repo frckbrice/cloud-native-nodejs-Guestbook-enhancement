@@ -1,0 +1,38 @@
+################################################################################
+# MongoDB PersistentVolumeClaim
+#
+# Motivation:
+# The original MongoDB deployment used ephemeral storage, causing data loss on pod
+# restarts. This addresses the limitation identified in PROJECT_OVERVIEW.md: "MongoDB
+# uses non-persistent storage (data lost on pod restart)".
+#
+# Approach:
+# - Creates a PersistentVolumeClaim (PVC) to request persistent storage
+# - Uses ReadWriteOnce access mode (single pod can mount as read-write)
+# - Requests 10Gi of storage (adjust based on requirements)
+# - Works with the StatefulSet to provide stable persistent storage
+#
+# Benefits:
+# - Data persists across pod restarts and deployments
+# - Production-ready storage solution
+# - Can be backed by cloud storage (GKE, EKS, AKS) or local storage (Minikube)
+# - Enables backup and restore capabilities
+#
+# Usage:
+# Apply this PVC before deploying the MongoDB StatefulSet. The StatefulSet will
+# automatically bind to this PVC and persist data to the allocated storage.
+################################################################################
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  labels:
+    app: nodejs-guestbook
+    tier: db
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
