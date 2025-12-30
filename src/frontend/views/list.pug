@@ -1,13 +1,42 @@
 if messages.length > 0
     for msg in messages
-        .card.my-3.col-12
+        .card.my-3.col-12(data-message-id=msg.id)
             .card-body
-                h5.card-title #{msg.name}
-                h6.card-subtitle.mb-2.text-muted  #{msg.timeAgo} 
-                br
-                p.card-text #{msg.body}
-                br
+                .d-flex.justify-content-between.align-items-start
+                    div.flex-grow-1
+                        h5.card-title #{msg.name}
+                        h6.card-subtitle.mb-2.text-muted #{msg.timeAgo}
+                        br
+                        p.card-text.message-body #{msg.body}
+                    .btn-group(role='group')
+                        button.btn.btn-sm.btn-outline-primary.edit-btn(type='button' data-id=msg.id data-name=msg.name data-body=msg.body) Edit
+                        button.btn.btn-sm.btn-outline-danger.delete-btn(type='button' data-id=msg.id) Delete
 
 else
     p.alert.alert-info(role='alert')
         | No messages are logged to the guestbook yet.
+
+if pagination && pagination.totalPages > 1
+    nav(aria-label='Page navigation')
+        ul.pagination.justify-content-center.mt-4
+            if pagination.hasPrevPage
+                li.page-item
+                    a.page-link(href=`/?page=${parseInt(currentPage) - 1}`) Previous
+            else
+                li.page-item.disabled
+                    span.page-link Previous
+            
+            - for (let i = 1; i <= pagination.totalPages; i++)
+                if i == parseInt(currentPage)
+                    li.page-item.active
+                        span.page-link= i
+                else
+                    li.page-item
+                        a.page-link(href=`/?page=${i}`)= i
+            
+            if pagination.hasNextPage
+                li.page-item
+                    a.page-link(href=`/?page=${parseInt(currentPage) + 1}`) Next
+            else
+                li.page-item.disabled
+                    span.page-link Next

@@ -106,20 +106,117 @@ const create = async (params) => {
     }
 };
 
-const findAll = async () => {
+const findAll = async (options = {}) => {
     try {
-        const messages = await messageModel.find({})
+        const page = parseInt(options.page) || 1;
+        const limit = parseInt(options.limit) || 20;
+        const skip = (page - 1) * limit;
+
+        const query = messageModel.find({})
             .sort({ createdAt: -1 })
-            .lean()
-            .exec();
-        logger.debug('Retrieved messages', { count: messages.length });
-        return messages.map(msg => ({
-            name: msg.name,
-            body: msg.body,
-            timestamp: msg.createdAt || msg._id.getTimestamp()
-        }));
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        const [messages, totalCount] = await Promise.all([
+            query.exec(),
+            messageModel.countDocuments({})
+        ]);
+
+        logger.debug('Retrieved messages', { count: messages.length, page, limit, totalCount });
+
+        return {
+            messages: messages.map(msg => ({
+                id: msg._id.toString(),
+                name: msg.name,
+                body: msg.body,
+                timestamp: msg.createdAt || msg._id.getTimestamp()
+            })),
+            pagination: {
+                page,
+                limit,
+                totalCount,
+                totalPages: Math.ceil(totalCount / limit),
+                hasNextPage: page < Math.ceil(totalCount / limit),
+                hasPrevPage: page > 1
+            }
+        };
     } catch (error) {
         logger.error('Failed to retrieve messages', { error: error.message });
+        throw error;
+    }
+};
+
+const findById = async (id) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            const error = new Error('Invalid message ID');
+            error.name = 'ValidationError';
+            throw error;
+        }
+        const message = await messageModel.findById(id).lean();
+        if (!message) {
+            const error = new Error('Message not found');
+            error.statusCode = 404;
+            throw error;
+        }
+        return {
+            id: message._id.toString(),
+            name: message.name,
+            body: message.body,
+            timestamp: message.createdAt || message._id.getTimestamp()
+        };
+    } catch (error) {
+        logger.error('Failed to find message', { id, error: error.message });
+        throw error;
+    }
+};
+
+const update = async (id, params) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            const error = new Error('Invalid message ID');
+            error.name = 'ValidationError';
+            throw error;
+        }
+        const message = await messageModel.findById(id);
+        if (!message) {
+            const error = new Error('Message not found');
+            error.statusCode = 404;
+            throw error;
+        }
+        message.name = params.name || message.name;
+        message.body = params.body || message.body;
+        const validationError = message.validateSync();
+        if (validationError) {
+            throw validationError;
+        }
+        await save(message);
+        logger.info('Message updated successfully', { messageId: id });
+        return message;
+    } catch (error) {
+        logger.error('Failed to update message', { id, error: error.message });
+        throw error;
+    }
+};
+
+const remove = async (id) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            const error = new Error('Invalid message ID');
+            error.name = 'ValidationError';
+            throw error;
+        }
+        const message = await messageModel.findByIdAndDelete(id);
+        if (!message) {
+            const error = new Error('Message not found');
+            error.statusCode = 404;
+            throw error;
+        }
+        logger.info('Message deleted successfully', { messageId: id });
+        return message;
+    } catch (error) {
+        logger.error('Failed to delete message', { id, error: error.message });
         throw error;
     }
 };
@@ -127,6 +224,9 @@ const findAll = async () => {
 module.exports = {
     create,
     findAll,
+    findById,
+    update,
+    remove,
     messageModel,
     connectToMongoDB
 };

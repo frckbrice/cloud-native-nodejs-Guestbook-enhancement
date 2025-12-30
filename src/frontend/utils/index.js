@@ -11,10 +11,13 @@ const timeAgo = (utcTime, currTime) => {
 const formatMessages = (messages) => {
     const currTime = moment.now()
     messages.forEach(message => {
-        message.timeAgo= timeAgo(message.timestamp, currTime)
+        message.timeAgo = timeAgo(message.timestamp, currTime)
+        // Ensure id is available for CRUD operations
+        if (!message.id && message._id) {
+            message.id = message._id.toString()
+        }
     });
     return messages
-    
 }
 
 module.exports = {

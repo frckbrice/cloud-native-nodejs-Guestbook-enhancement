@@ -21,6 +21,7 @@ app.use(router);
 
 app.use(express.static('public'));
 router.use(bodyParser.urlencoded({ extended: false }));
+router.use(bodyParser.json());
 
 // Health check endpoint
 router.get('/health', (req, res) => {
@@ -62,26 +63,40 @@ process.on('SIGINT', () => {
 
 // Handles GET request to /
 router.get('/', errorHandler.asyncHandler(async (req, res) => {
-  logger.info('GET / request received');
+  logger.info('GET / request received', { query: req.query });
+
+  const page = req.query.page || 1;
+  const limit = req.query.limit || 20;
 
   const fetchMessages = async () => {
-    const response = await axios.get(BACKEND_URI, { timeout: 5000 });
+    const response = await axios.get(BACKEND_URI, { 
+      params: { page, limit },
+      timeout: 5000 
+    });
     return response.data;
   };
 
   try {
-    const messages = await retry(fetchMessages, {
+    const data = await retry(fetchMessages, {
       maxRetries: 3,
       initialDelay: 1000
     });
 
-    logger.info('Messages retrieved successfully', { count: messages.length });
-    const result = util.formatMessages(messages);
-    res.render('home', { messages: result });
+    logger.info('Messages retrieved successfully', { 
+      count: data.messages.length,
+      pagination: data.pagination 
+    });
+    const result = util.formatMessages(data.messages);
+    res.render('home', { 
+      messages: result,
+      pagination: data.pagination,
+      currentPage: page
+    });
   } catch (error) {
     logger.error('Failed to retrieve messages', { error: error.message });
     res.render('home', {
       messages: [],
+      pagination: null,
       error: 'Unable to load messages. Please try again later.'
     });
   }
@@ -128,5 +143,68 @@ router.post('/post', errorHandler.asyncHandler(async (req, res) => {
       messages: [],
       error: 'Failed to post message. Please try again later.'
     });
+  }
+}));
+
+// Handles PUT request to /messages/:id (update)
+router.put('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
+  logger.info('PUT /messages/:id request received', { id: req.params.id });
+
+  const validation = validator.validateMessageData({
+    name: req.body.name,
+    message: req.body.body || req.body.message
+  });
+
+  if (!validation.valid) {
+    const error = new Error('Validation failed');
+    error.name = 'ValidationError';
+    error.details = validation.errors;
+    throw error;
+  }
+
+  const updateMessage = async () => {
+    const response = await axios.put(`${BACKEND_URI}/${req.params.id}`, validation.data, {
+      timeout: 5000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return response;
+  };
+
+  try {
+    await retry(updateMessage, {
+      maxRetries: 3,
+      initialDelay: 1000
+    });
+
+    logger.info('Message updated successfully');
+    res.status(200).json({ success: true });
+  } catch (error) {
+    logger.error('Failed to update message', { error: error.message });
+    throw error;
+  }
+}));
+
+// Handles DELETE request to /messages/:id
+router.delete('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
+  logger.info('DELETE /messages/:id request received', { id: req.params.id });
+
+  const deleteMessage = async () => {
+    const response = await axios.delete(`${BACKEND_URI}/${req.params.id}`, {
+      timeout: 5000
+    });
+    return response;
+  };
+
+  try {
+    await retry(deleteMessage, {
+      maxRetries: 3,
+      initialDelay: 1000
+    });
+
+    logger.info('Message deleted successfully');
+    res.status(204).send();
+  } catch (error) {
+    logger.error('Failed to delete message', { error: error.message });
+    throw error;
   }
 }));
