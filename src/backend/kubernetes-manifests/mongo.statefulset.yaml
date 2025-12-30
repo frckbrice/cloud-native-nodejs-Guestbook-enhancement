@@ -3,8 +3,8 @@
 #
 # Motivation:
 # The original MongoDB deployment used a Deployment with ephemeral storage, causing
-# data loss on pod restarts. This addresses the limitation in PROJECT_OVERVIEW.md 
-# for production-ready storage.
+# data loss on pod restarts. This addresses the limitation in PROJECT_OVERVIEW.md and
+# follows recommendations from KUBERNETES_ARCHITECTURE.md for production-ready storage.
 #
 # Approach:
 # - Replaces Deployment with StatefulSet for stateful application requirements
