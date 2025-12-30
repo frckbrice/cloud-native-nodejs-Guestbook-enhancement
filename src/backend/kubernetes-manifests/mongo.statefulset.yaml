@@ -1,0 +1,99 @@
+################################################################################
+# MongoDB StatefulSet with Persistent Storage
+#
+# Motivation:
+# The original MongoDB deployment used a Deployment with ephemeral storage, causing
+# data loss on pod restarts. This addresses the limitation in PROJECT_OVERVIEW.md 
+# for production-ready storage.
+#
+# Approach:
+# - Replaces Deployment with StatefulSet for stateful application requirements
+# - Uses volumeClaimTemplates for automatic PVC creation per pod
+# - Implements health checks (liveness and readiness probes)
+# - Adds resource limits and requests for better resource management
+# - Provides stable network identity and ordered deployment
+#
+# Why StatefulSet over Deployment:
+# - StatefulSets provide stable network identities (predictable DNS names)
+# - Ordered deployment and scaling (important for databases)
+# - Stable persistent storage per pod
+# - Better suited for stateful applications like databases
+#
+# Benefits:
+# - Data persistence across pod restarts and deployments
+# - Stable network identity for reliable service discovery
+# - Production-ready database deployment pattern
+# - Better resource management with limits and requests
+# - Health checks ensure database availability
+#
+# Migration Note:
+# When migrating from Deployment to StatefulSet, you may need to:
+# 1. Delete the old Deployment
+# 2. Apply the StatefulSet
+# 3. Ensure the service is configured as headless (clusterIP: None)
+################################################################################
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nodejs-guestbook-mongodb
+  labels:
+    app: nodejs-guestbook
+    tier: db
+spec:
+  serviceName: nodejs-guestbook-mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nodejs-guestbook
+      tier: db
+  template:
+    metadata:
+      labels:
+        app: nodejs-guestbook
+        tier: db
+    spec:
+      containers:
+      - name: mongo
+        image: mongo:4
+        ports:
+        - containerPort: 27017
+          name: mongodb
+        volumeMounts:
+        - name: mongodb-data
+          mountPath: /data/db
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "mongo --eval 'db.adminCommand(\"ping\")'"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "mongo --eval 'db.adminCommand(\"ping\")'"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+  volumeClaimTemplates:
+  - metadata:
+      name: mongodb-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+

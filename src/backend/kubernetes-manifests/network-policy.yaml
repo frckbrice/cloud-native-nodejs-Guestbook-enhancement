@@ -1,0 +1,155 @@
+################################################################################
+# Network Policies for Enhanced Security
+#
+# Motivation:
+# The original deployment had no network isolation, allowing any pod to communicate
+# with any other pod. This addresses the recommendation from PROJECT_OVERVIEW.md:
+# "Add Network Policies for enhanced security".
+#
+# Approach:
+# - Implements principle of least privilege for network communication
+# - Restricts traffic to only necessary service-to-service communication
+# - Frontend can only communicate with backend
+# - Backend can only communicate with MongoDB
+# - MongoDB is isolated and only accepts connections from backend
+# - Ingress controller can access frontend
+#
+# Benefits:
+# - Enhanced security through network isolation
+# - Prevents lateral movement in case of compromise
+# - Follows zero-trust networking principles
+# - Better compliance with security best practices
+#
+# Requirements:
+# - Network policy support must be enabled in your Kubernetes cluster
+# - For GKE, requires network policy addon
+# - For Minikube, requires CNI plugin that supports NetworkPolicy
+################################################################################
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: guestbook-frontend-policy
+  labels:
+    app: nodejs-guestbook
+    tier: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: nodejs-guestbook
+      tier: frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from Ingress controller (adjust labels based on your ingress controller)
+  - from:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow egress to backend service only
+  - to:
+    - podSelector:
+        matchLabels:
+          app: nodejs-guestbook
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: guestbook-backend-policy
+  labels:
+    app: nodejs-guestbook
+    tier: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: nodejs-guestbook
+      tier: backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from frontend only
+  - from:
+    - podSelector:
+        matchLabels:
+          app: nodejs-guestbook
+          tier: frontend
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow egress to MongoDB only
+  - to:
+    - podSelector:
+        matchLabels:
+          app: nodejs-guestbook
+          tier: db
+    ports:
+    - protocol: TCP
+      port: 27017
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: guestbook-mongodb-policy
+  labels:
+    app: nodejs-guestbook
+    tier: db
+spec:
+  podSelector:
+    matchLabels:
+      app: nodejs-guestbook
+      tier: db
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from backend only
+  - from:
+    - podSelector:
+        matchLabels:
+          app: nodejs-guestbook
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 27017
+  egress:
+  # Allow DNS resolution only
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+
