@@ -4,6 +4,8 @@ const Message = require('./messages');
 const errorHandler = require('../../shared/utils/errorHandler');
 const validator = require('../../shared/utils/validation');
 const logger = require('../../shared/utils/logger');
+const socketManager = require('../../shared/utils/socketManager');
+const { authenticate } = require('../../shared/middleware/authenticate');
 
 const router = express.Router();
 router.use(bodyParser.json());
