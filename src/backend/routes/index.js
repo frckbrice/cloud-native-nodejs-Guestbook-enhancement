@@ -15,6 +15,12 @@ router.get('/health', (req, res) => {
     res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// Metrics endpoint
+router.get('/metrics', (req, res) => {
+    const metrics = getMetrics();
+    res.status(200).json(metrics);
+});
+
 // Readiness check endpoint (includes DB connection)
 router.get('/ready', async (req, res) => {
     try {
