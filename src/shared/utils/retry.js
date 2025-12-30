@@ -1,6 +1,33 @@
 /**
- * Retry utility for handling transient failures
- * Implements exponential backoff for retry attempts
+ * Retry Utility for Handling Transient Failures
+ * 
+ * Motivation:
+ * The original codebase had no retry logic, causing failures when services were temporarily
+ * unavailable (e.g., during deployments or network hiccups). This module implements robust
+ * retry logic with exponential backoff to handle transient issues gracefully.
+ * 
+ * Approach:
+ * - Implements exponential backoff to avoid overwhelming failing services
+ * - Configurable retry attempts and delays
+ * - Smart error detection to only retry on transient failures
+ * - Integrates with logging system for observability
+ * - Prevents retry storms with maximum delay caps
+ * 
+ * Benefits:
+ * - Improved resilience to transient network issues
+ * - Better handling of service startup dependencies
+ * - Reduces cascading failures in microservices architecture
+ * - Configurable retry behavior per use case
+ * - Prevents infinite retry loops with sensible defaults
+ * 
+ * Use Cases:
+ * - Database connection retries during startup
+ * - API call retries when backend is temporarily unavailable
+ * - Network request retries for transient network errors
+ * 
+ * Design Pattern:
+ * Uses exponential backoff algorithm to gradually increase delay between retries,
+ * preventing service overload while maintaining responsiveness.
  */
 
 const logger = require('./logger');

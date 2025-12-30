@@ -1,6 +1,28 @@
 /**
- * Centralized error handling utilities
- * Provides consistent error responses and error logging
+ * Centralized Error Handling Utilities
+ * 
+ * Motivation:
+ * The original codebase had inconsistent error handling with try-catch blocks scattered
+ * throughout, leading to inconsistent error responses and poor error tracking. This module
+ * standardizes error handling across all services.
+ * 
+ * Approach:
+ * - Provides consistent error response format across all endpoints
+ * - Automatically maps error types to appropriate HTTP status codes
+ * - Integrates with logging system for error tracking
+ * - Implements asyncHandler wrapper to eliminate repetitive try-catch blocks
+ * - Handles transient vs permanent errors appropriately
+ * 
+ * Benefits:
+ * - Consistent API error responses for better client experience
+ * - Centralized error logging for easier debugging
+ * - Reduces code duplication (DRY principle)
+ * - Better error categorization for monitoring and alerting
+ * - Graceful error handling without breaking application flow
+ * 
+ * Design Pattern:
+ * Uses Express middleware pattern with asyncHandler wrapper to catch async errors
+ * automatically, eliminating the need for manual try-catch in every route handler.
  */
 
 const logger = require('./logger');

@@ -1,6 +1,27 @@
 /**
- * Input validation and sanitization utilities
- * Prevents XSS attacks and validates user input
+ * Input Validation and Sanitization Utilities
+ * 
+ * Motivation:
+ * The original codebase lacked input validation and sanitization, making it vulnerable
+ * to XSS attacks and data corruption. This module addresses security concerns identified
+ * in PROJECT_OVERVIEW.md limitations (no input sanitization for XSS protection).
+ * 
+ * Approach:
+ * - Implements comprehensive input sanitization to prevent XSS attacks
+ * - Validates input length and format before processing
+ * - Escapes HTML special characters and removes dangerous patterns
+ * - Provides reusable validation functions following DRY principles
+ * - Returns structured validation results for consistent error handling
+ * 
+ * Security Benefits:
+ * - Prevents Cross-Site Scripting (XSS) attacks
+ * - Validates input length to prevent DoS attacks
+ * - Ensures data integrity before database operations
+ * - Centralized validation logic for maintainability
+ * 
+ * Usage:
+ * All user input should be validated and sanitized using these utilities before
+ * being processed or stored in the database.
  */
 
 const validator = {

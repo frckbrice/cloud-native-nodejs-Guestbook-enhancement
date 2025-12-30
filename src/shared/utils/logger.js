@@ -1,6 +1,23 @@
 /**
- * Centralized logging utility
- * Provides structured logging with different log levels
+ * Centralized Logging Utility
+ * 
+ * Motivation:
+ * The original codebase used console.log/error inconsistently, making debugging and
+ * production monitoring difficult. This module provides a centralized, structured logging
+ * system that follows modern observability best practices.
+ * 
+ * Approach:
+ * - Implements log levels (ERROR, WARN, INFO, DEBUG) with configurable filtering
+ * - Outputs structured JSON logs for easy parsing by log aggregation tools
+ * - Includes timestamps and metadata for better traceability
+ * - Configurable via LOG_LEVEL environment variable
+ * - Follows DRY principle by centralizing all logging logic
+ * 
+ * Benefits:
+ * - Consistent log format across all services
+ * - Easy integration with log aggregation systems (ELK, Splunk, etc.)
+ * - Performance optimization through log level filtering
+ * - Better debugging with structured metadata
  */
 
 const logLevels = {
