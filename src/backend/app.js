@@ -1,9 +1,11 @@
 const express = require('express');
+const http = require('http');
 const app = express();
 const routes = require('./routes');
 const messages = require('./routes/messages');
 const config = require('../shared/utils/config');
 const logger = require('../shared/utils/logger');
+const socketManager = require('../shared/utils/socketManager');
 
 app.use('/', routes);
 
@@ -13,8 +15,14 @@ messages.connectToMongoDB().catch((error) => {
   process.exit(1);
 });
 
-// Starts an http server on the $PORT environment variable
-const server = app.listen(config.port, () => {
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize Socket.IO
+socketManager.initialize(server);
+
+// Start server
+server.listen(config.port, () => {
   logger.info('Backend server started', { port: config.port, env: config.nodeEnv });
 });
 

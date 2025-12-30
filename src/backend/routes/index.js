@@ -4,6 +4,7 @@ const Message = require('./messages');
 const errorHandler = require('../../shared/utils/errorHandler');
 const validator = require('../../shared/utils/validation');
 const logger = require('../../shared/utils/logger');
+const socketManager = require('../../shared/utils/socketManager');
 
 const router = express.Router();
 router.use(bodyParser.json());
@@ -66,12 +67,19 @@ router.post('/messages', errorHandler.asyncHandler(async (req, res) => {
 
     const message = await Message.create(validation.data);
     logger.info('Message created successfully', { messageId: message._id });
-    res.status(201).json({
+
+    const messageResponse = {
         id: message._id,
         name: message.name,
         body: message.body,
+        imageUrl: message.imageUrl,
         timestamp: message.createdAt
-    });
+    };
+
+    // Broadcast real-time update
+    socketManager.broadcastMessageCreated(messageResponse);
+
+    res.status(201).json(messageResponse);
 }));
 
 // Handles PUT requests to /messages/:id (update)
@@ -88,12 +96,19 @@ router.put('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
 
     const message = await Message.update(req.params.id, validation.data);
     logger.info('Message updated successfully', { messageId: req.params.id });
-    res.status(200).json({
+
+    const messageResponse = {
         id: message._id,
         name: message.name,
         body: message.body,
+        imageUrl: message.imageUrl,
         timestamp: message.updatedAt || message.createdAt
-    });
+    };
+
+    // Broadcast real-time update
+    socketManager.broadcastMessageUpdated(messageResponse);
+
+    res.status(200).json(messageResponse);
 }));
 
 // Handles DELETE requests to /messages/:id
@@ -102,6 +117,10 @@ router.delete('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
 
     await Message.remove(req.params.id);
     logger.info('Message deleted successfully', { messageId: req.params.id });
+
+    // Broadcast real-time update
+    socketManager.broadcastMessageDeleted(req.params.id);
+
     res.status(204).send();
 }));
 
