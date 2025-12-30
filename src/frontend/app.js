@@ -1,83 +1,132 @@
-const express = require('express')
+const express = require('express');
 const path = require('path');
 const app = express();
-const bodyParser = require('body-parser')
-const axios = require('axios')
+const bodyParser = require('body-parser');
+const axios = require('axios');
+const util = require('./utils');
+const config = require('../shared/utils/config');
+const logger = require('../shared/utils/logger');
+const validator = require('../shared/utils/validation');
+const errorHandler = require('../shared/utils/errorHandler');
+const { retry } = require('../shared/utils/retry');
 
-const util = require('./utils')
+const BACKEND_URI = `http://${config.apiAddress}/messages`;
+const BACKEND_HEALTH_URI = `http://${config.apiAddress}/health`;
 
-const GUESTBOOK_API_ADDR = process.env.GUESTBOOK_API_ADDR
+app.set('view engine', 'pug');
+app.set('views', path.join(__dirname, 'views'));
 
-const BACKEND_URI = `http://${GUESTBOOK_API_ADDR}/messages`
+const router = express.Router();
+app.use(router);
 
-app.set("view engine", "pug")
-app.set("views", path.join(__dirname, "views"))
+app.use(express.static('public'));
+router.use(bodyParser.urlencoded({ extended: false }));
 
-const router = express.Router()
-app.use(router)
+// Health check endpoint
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
 
-app.use(express.static('public'))
-router.use(bodyParser.urlencoded({ extended: false }))
-
-// Application will fail if environment variables are not set
-if (!process.env.PORT) {
-  const errMsg = "PORT environment variable is not defined"
-  console.error(errMsg)
-  throw new Error(errMsg)
-}
-
-if (!process.env.GUESTBOOK_API_ADDR) {
-  const errMsg = "GUESTBOOK_API_ADDR environment variable is not defined"
-  console.error(errMsg)
-  throw new Error(errMsg)
-}
+// Readiness check endpoint (includes backend connectivity)
+router.get('/ready', async (req, res) => {
+  try {
+    await axios.get(BACKEND_HEALTH_URI, { timeout: 2000 });
+    res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
+  } catch (error) {
+    logger.error('Readiness check failed - backend unreachable', { error: error.message });
+    res.status(503).json({ status: 'not ready', reason: 'Backend service unavailable' });
+  }
+});
 
 // Starts an http server on the $PORT environment variable
-const PORT = process.env.PORT;
-app.listen(PORT, () => {
-  console.log(`App listening on port ${PORT}`);
-  console.log('Press Ctrl+C to quit.');
+const server = app.listen(config.port, () => {
+  logger.info('Frontend server started', { port: config.port, env: config.nodeEnv });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
 });
 
 // Handles GET request to /
-router.get("/", (req, res) => {
-  // retrieve list of messages from the backend, and use them to render the HTML template
-  axios.get(BACKEND_URI)
-    .then(response => {
-      console.log(`response from ${BACKEND_URI}: ` + response.status)
-      const result = util.formatMessages(response.data)
-      res.render("home", { messages: result })
-    }).catch(error => {
-      console.error('error: ' + error)
-    })
-});
+router.get('/', errorHandler.asyncHandler(async (req, res) => {
+  logger.info('GET / request received');
+  
+  const fetchMessages = async () => {
+    const response = await axios.get(BACKEND_URI, { timeout: 5000 });
+    return response.data;
+  };
+
+  try {
+    const messages = await retry(fetchMessages, {
+      maxRetries: 3,
+      initialDelay: 1000
+    });
+    
+    logger.info('Messages retrieved successfully', { count: messages.length });
+    const result = util.formatMessages(messages);
+    res.render('home', { messages: result });
+  } catch (error) {
+    logger.error('Failed to retrieve messages', { error: error.message });
+    res.render('home', {
+      messages: [],
+      error: 'Unable to load messages. Please try again later.'
+    });
+  }
+}));
 
 // Handles POST request to /post
-router.post('/post', (req, res) => {
-  console.log(`received request: ${req.method} ${req.url}`)
+router.post('/post', errorHandler.asyncHandler(async (req, res) => {
+  logger.info('POST /post request received');
 
-  // validate request
-  const name = req.body.name
-  const message = req.body.message
-  if (!name || name.length == 0) {
-    res.status(400).send("name is not specified")
-    return
+  const validation = validator.validateMessageData({
+    name: req.body.name,
+    message: req.body.message
+  });
+
+  if (!validation.valid) {
+    const errorMessages = Object.values(validation.errors).join(', ');
+    logger.warn('Validation failed', { errors: validation.errors });
+    res.status(400).render('home', {
+      messages: [],
+      error: `Validation failed: ${errorMessages}`
+    });
+    return;
   }
 
-  if (!message || message.length == 0) {
-    res.status(400).send("message is not specified")
-    return
-  }
+  const postMessage = async () => {
+    const response = await axios.post(BACKEND_URI, validation.data, {
+      timeout: 5000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return response;
+  };
 
-  // send the new message to the backend and redirect to the homepage
-  console.log(`posting to ${BACKEND_URI}- name: ${name} body: ${message}`)
-  axios.post(BACKEND_URI, {
-    name: name,
-    body: message
-  }).then(response => {
-    console.log(`response from ${BACKEND_URI}` + response.status)
-    res.redirect('/')
-  }).catch(error => {
-    console.error('error: ' + error)
-  })
-});
+  try {
+    await retry(postMessage, {
+      maxRetries: 3,
+      initialDelay: 1000
+    });
+    
+    logger.info('Message posted successfully');
+    res.redirect('/');
+  } catch (error) {
+    logger.error('Failed to post message', { error: error.message });
+    res.status(500).render('home', {
+      messages: [],
+      error: 'Failed to post message. Please try again later.'
+    });
+  }
+}));

@@ -1,31 +1,44 @@
-const express = require('express')
-const app = express()
-const routes = require('./routes')
-const PORT = process.env.PORT
-const messages = require('./routes/messages')
+const express = require('express');
+const app = express();
+const routes = require('./routes');
+const messages = require('./routes/messages');
+const config = require('../shared/utils/config');
+const logger = require('../shared/utils/logger');
 
-app.use('/', routes)
+app.use('/', routes);
 
-// Application will fail if environment variables are not set
-if(!process.env.PORT) {
-  const errMsg = "PORT environment variable is not defined"
-  console.error(errMsg)
-  throw new Error(errMsg)
-}
-
-if(!process.env.GUESTBOOK_DB_ADDR) {
-  const errMsg = "GUESTBOOK_DB_ADDR environment variable is not defined"
-  console.error(errMsg)
-  throw new Error(errMsg)
-}
-
-// Connect to MongoDB, will retry only once
-messages.connectToMongoDB()
-
-// Starts an http server on the $PORT environment variable
-app.listen(PORT, () => {
-  console.log(`App listening on port ${PORT}`);
-  console.log('Press Ctrl+C to quit.');
+// Connect to MongoDB with retry logic
+messages.connectToMongoDB().catch((error) => {
+  logger.error('Failed to connect to MongoDB during startup', { error: error.message });
+  process.exit(1);
 });
 
-module.exports = app
+// Starts an http server on the $PORT environment variable
+const server = app.listen(config.port, () => {
+  logger.info('Backend server started', { port: config.port, env: config.nodeEnv });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    logger.info('HTTP server closed');
+    messages.messageModel.db.close(() => {
+      logger.info('MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    logger.info('HTTP server closed');
+    messages.messageModel.db.close(() => {
+      logger.info('MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+});
+
+module.exports = app;
