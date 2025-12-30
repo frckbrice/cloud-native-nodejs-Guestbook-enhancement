@@ -52,8 +52,8 @@ router.get('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
     res.status(200).json(message);
 }));
 
-// Handles POST requests to /messages
-router.post('/messages', errorHandler.asyncHandler(async (req, res) => {
+// Handles POST requests to /messages (requires authentication)
+router.post('/messages', authenticate, errorHandler.asyncHandler(async (req, res) => {
     logger.info('POST /messages request received');
 
     const validation = validator.validateMessageData(req.body);
@@ -74,8 +74,8 @@ router.post('/messages', errorHandler.asyncHandler(async (req, res) => {
     });
 }));
 
-// Handles PUT requests to /messages/:id (update)
-router.put('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
+// Handles PUT requests to /messages/:id (update, requires authentication)
+router.put('/messages/:id', authenticate, errorHandler.asyncHandler(async (req, res) => {
     logger.info('PUT /messages/:id request received', { id: req.params.id });
 
     const validation = validator.validateMessageData(req.body);
@@ -96,8 +96,8 @@ router.put('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
     });
 }));
 
-// Handles DELETE requests to /messages/:id
-router.delete('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
+// Handles DELETE requests to /messages/:id (requires authentication)
+router.delete('/messages/:id', authenticate, errorHandler.asyncHandler(async (req, res) => {
     logger.info('DELETE /messages/:id request received', { id: req.params.id });
 
     await Message.remove(req.params.id);
