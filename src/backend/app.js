@@ -7,6 +7,10 @@ const messages = require('./routes/messages');
 const config = require('../shared/utils/config');
 const logger = require('../shared/utils/logger');
 const socketManager = require('../shared/utils/socketManager');
+const { metricsMiddleware } = require('../shared/middleware/metrics');
+
+// Apply metrics middleware globally
+app.use(metricsMiddleware);
 
 app.use('/auth', authRoutes);
 app.use('/', routes);
