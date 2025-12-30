@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: guestbook-ingress
+  labels:
+    app: nodejs-guestbook
+    tier: frontend
+  annotations:
+    # For production, configure SSL/TLS termination
+    # kubernetes.io/ingress.class: "nginx"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  # For production, uncomment and configure TLS
+  # tls:
+  # - hosts:
+  #   - guestbook.example.com
+  #   secretName: guestbook-tls
+  rules:
+  - host: guestbook.local  # Change to your domain in production
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nodejs-guestbook-frontend
+            port:
+              number: 80
+
