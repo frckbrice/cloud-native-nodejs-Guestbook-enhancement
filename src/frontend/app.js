@@ -63,7 +63,7 @@ process.on('SIGINT', () => {
 // Handles GET request to /
 router.get('/', errorHandler.asyncHandler(async (req, res) => {
   logger.info('GET / request received');
-  
+
   const fetchMessages = async () => {
     const response = await axios.get(BACKEND_URI, { timeout: 5000 });
     return response.data;
@@ -74,7 +74,7 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
       maxRetries: 3,
       initialDelay: 1000
     });
-    
+
     logger.info('Messages retrieved successfully', { count: messages.length });
     const result = util.formatMessages(messages);
     res.render('home', { messages: result });
@@ -119,7 +119,7 @@ router.post('/post', errorHandler.asyncHandler(async (req, res) => {
       maxRetries: 3,
       initialDelay: 1000
     });
-    
+
     logger.info('Message posted successfully');
     res.redirect('/');
   } catch (error) {

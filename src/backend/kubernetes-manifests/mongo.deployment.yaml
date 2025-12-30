@@ -27,3 +27,24 @@ spec:
           image: mongo:4
           ports:
             - containerPort: 27017
+              name: mongodb
+          livenessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "mongo --eval 'db.adminCommand(\"ping\")'"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "mongo --eval 'db.adminCommand(\"ping\")'"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
