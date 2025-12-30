@@ -34,6 +34,11 @@ spec:
           value: "8080"
         - name: GUESTBOOK_DB_ADDR
           value: "nodejs-guestbook-mongodb:27017"
+        - name: UPLOAD_DIR
+          value: "/app/uploads"
+        volumeMounts:
+        - name: uploads-storage
+          mountPath: /app/uploads
         livenessProbe:
           httpGet:
             path: /health
@@ -50,3 +55,6 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
+      volumes:
+      - name: uploads-storage
+        emptyDir: {}
