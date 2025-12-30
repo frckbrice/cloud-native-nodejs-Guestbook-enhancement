@@ -8,6 +8,13 @@ html
         link(rel='stylesheet', href='css/style.css')
         link(rel='stylesheet', href='https://fonts.googleapis.com/css?family=Roboto')
         script(src='https://code.jquery.com/jquery-3.6.0.min.js')
+        script(src='https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/js/bootstrap.bundle.min.js')
+        script.
+            // Update custom file input label
+            $('.custom-file-input').on('change', function() {
+                let fileName = $(this).val().split('\\').pop();
+                $(this).next('.custom-file-label').html(fileName || 'Choose image (optional)');
+            });
     body
         .header
             .container

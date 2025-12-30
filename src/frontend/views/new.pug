@@ -1,12 +1,18 @@
-form.form-inline(action="/post", method="POST")
+form.form-inline(action="/post", method="POST", enctype="multipart/form-data")
     label.sr-only(for="name") Name
-    .input-group.mb-2.mr-sm-2
+    .input-group.mb-2.mr-sm-2.flex-fill
         .input-group-prepend
             .input-group-text Your Name
-        input#name.form-control(type="text", name="name", required="")
+        input#name.form-control(type="text", name="name", required="", placeholder="Enter your name")
     label.sr-only(for="message") Message
-    .input-group.mb-2.mr-sm-2
+    .input-group.mb-2.mr-sm-2.flex-fill
         .input-group-prepend
             .input-group-text Message
-        input#message.form-control(type="text", name="message", required="")
-    button.btn.btn-primary.mb-2(type="submit") Post to Guestbook
+        input#message.form-control(type="text", name="message", required="", placeholder="Enter your message")
+    .input-group.mb-2.mr-sm-2.flex-fill
+        .input-group-prepend
+            .input-group-text Image
+        .custom-file
+            input#image.custom-file-input(type="file", name="image", accept="image/*")
+            label.custom-file-label(for="image") Choose image (optional)
+    button.btn.btn-primary.mb-2.w-100.w-md-auto(type="submit") Post to Guestbook
