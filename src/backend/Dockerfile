@@ -1,14 +1,20 @@
-# Use base node 18-alpine image from Docker hub
+# Use base node 19.9.0-alpine image from Docker hub
 FROM node:19.9.0-alpine
 
 WORKDIR /backend
 
+# Install build dependencies for native modules (bcrypt)
+RUN apk add --no-cache python3 make g++
+
 # Copy package.json and install dependencies
-COPY package*.json ./
+COPY src/backend/package*.json ./
 RUN npm install
 
-# Copy rest of the application csource code
-COPY . .
+# Copy backend application source code
+COPY src/backend/ ./
+
+# Copy shared utilities to /shared (sibling to /backend)
+COPY src/shared/ /shared/
 
 # Run app.js
 ENTRYPOINT ["node", "app.js"]

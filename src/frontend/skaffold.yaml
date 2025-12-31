@@ -7,7 +7,9 @@ metadata:
 build:
   artifacts:
   - image: nodejs-guestbook-frontend
-    context: .
+    context: ../..
+    docker:
+      dockerfile: src/frontend/Dockerfile
 deploy:
   kubectl:
     manifests:

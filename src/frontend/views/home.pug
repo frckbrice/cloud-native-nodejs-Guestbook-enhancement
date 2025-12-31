@@ -8,6 +8,44 @@ html
         link(rel='stylesheet', href='css/style.css')
         link(rel='stylesheet', href='https://fonts.googleapis.com/css?family=Roboto')
         script(src='https://code.jquery.com/jquery-3.6.0.min.js')
+        script(src='https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/js/bootstrap.bundle.min.js')
+        script(src='https://cdn.socket.io/4.7.2/socket.io.min.js')
+        script.
+            // Update custom file input label
+            $('.custom-file-input').on('change', function() {
+                let fileName = $(this).val().split('\\').pop();
+                $(this).next('.custom-file-label').html(fileName || 'Choose image (optional)');
+            });
+            
+            // Initialize Socket.IO for real-time updates
+            const socket = io(window.location.origin.replace(/:\d+$/, ':8080'));
+            
+            socket.on('connect', function() {
+                console.log('Connected to real-time updates');
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from real-time updates');
+            });
+            
+            // Listen for new messages
+            socket.on('message:created', function(message) {
+                console.log('New message received:', message);
+                // Reload page to show new message (or implement dynamic insertion)
+                location.reload();
+            });
+            
+            // Listen for message updates
+            socket.on('message:updated', function(message) {
+                console.log('Message updated:', message);
+                location.reload();
+            });
+            
+            // Listen for message deletions
+            socket.on('message:deleted', function(data) {
+                console.log('Message deleted:', data.id);
+                location.reload();
+            });
     body
         .header
             .container

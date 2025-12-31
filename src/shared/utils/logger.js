@@ -46,22 +46,22 @@ const formatMessage = (level, message, metadata = {}) => {
 
 const logger = {
   error: (message, metadata = {}) => {
-    if (levelValue >= logLevels.ERROR) {
+    if (levelValue >= logLevels.ERROR && process.env.NODE_ENV === 'development') {
       console.error(formatMessage('ERROR', message, metadata));
     }
   },
   warn: (message, metadata = {}) => {
-    if (levelValue >= logLevels.WARN) {
+    if (levelValue >= logLevels.WARN && process.env.NODE_ENV === 'development') {
       console.warn(formatMessage('WARN', message, metadata));
     }
   },
   info: (message, metadata = {}) => {
-    if (levelValue >= logLevels.INFO) {
+    if (levelValue >= logLevels.INFO && process.env.NODE_ENV === 'development') {
       console.log(formatMessage('INFO', message, metadata));
     }
   },
   debug: (message, metadata = {}) => {
-    if (levelValue >= logLevels.DEBUG) {
+    if (levelValue >= logLevels.DEBUG && process.env.NODE_ENV === 'development') {
       console.log(formatMessage('DEBUG', message, metadata));
     }
   }

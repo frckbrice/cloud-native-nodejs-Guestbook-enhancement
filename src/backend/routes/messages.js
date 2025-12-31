@@ -68,6 +68,11 @@ const messageSchema = mongoose.Schema({
         required: [true, 'Message Body is required'],
         trim: true,
         maxlength: [5000, 'Message must be less than 5000 characters']
+    },
+    imageUrl: {
+        type: String,
+        required: false,
+        trim: true
     }
 }, {
     timestamps: true
@@ -76,8 +81,8 @@ const messageSchema = mongoose.Schema({
 const messageModel = mongoose.model('Message', messageSchema);
 
 const construct = (params) => {
-    const { name, body } = params;
-    return new messageModel({ name, body });
+    const { name, body, imageUrl } = params;
+    return new messageModel({ name, body, imageUrl });
 };
 
 const save = async (message) => {
@@ -189,6 +194,9 @@ const update = async (id, params) => {
         }
         message.name = params.name || message.name;
         message.body = params.body || message.body;
+        if (params.imageUrl !== undefined) {
+            message.imageUrl = params.imageUrl;
+        }
         const validationError = message.validateSync();
         if (validationError) {
             throw validationError;

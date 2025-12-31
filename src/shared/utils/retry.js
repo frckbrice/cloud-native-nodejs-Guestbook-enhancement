@@ -43,51 +43,51 @@ const logger = require('./logger');
  * @returns {Promise} - Promise that resolves with function result
  */
 const retry = async (fn, options = {}) => {
-  const {
-    maxRetries = 3,
-    initialDelay = 1000,
-    maxDelay = 10000,
-    shouldRetry = (error) => {
-      // Retry on network errors, timeouts, and transient database errors
-      return error.code === 'ECONNREFUSED' ||
-             error.code === 'ETIMEDOUT' ||
-             error.code === 'ENOTFOUND' ||
-             error.name === 'MongoNetworkError' ||
-             error.name === 'MongoServerSelectionError';
+    const {
+        maxRetries = 3,
+        initialDelay = 1000,
+        maxDelay = 10000,
+        shouldRetry = (error) => {
+            // Retry on network errors, timeouts, and transient database errors
+            return error.code === 'ECONNREFUSED' ||
+                error.code === 'ETIMEDOUT' ||
+                error.code === 'ENOTFOUND' ||
+                error.name === 'MongoNetworkError' ||
+                error.name === 'MongoServerSelectionError';
+        }
+    } = options;
+
+    let lastError;
+    let delay = initialDelay;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+
+            if (attempt === maxRetries || !shouldRetry(error)) {
+                logger.error('Retry exhausted or non-retryable error', {
+                    attempt: attempt + 1,
+                    maxRetries: maxRetries + 1,
+                    error: error.message
+                });
+                throw error;
+            }
+
+            logger.warn('Retry attempt failed', {
+                attempt: attempt + 1,
+                maxRetries: maxRetries + 1,
+                delay,
+                error: error.message
+            });
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay = Math.min(delay * 2, maxDelay);
+        }
     }
-  } = options;
 
-  let lastError;
-  let delay = initialDelay;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-
-      if (attempt === maxRetries || !shouldRetry(error)) {
-        logger.error('Retry exhausted or non-retryable error', {
-          attempt: attempt + 1,
-          maxRetries: maxRetries + 1,
-          error: error.message
-        });
-        throw error;
-      }
-
-      logger.warn('Retry attempt failed', {
-        attempt: attempt + 1,
-        maxRetries: maxRetries + 1,
-        delay,
-        error: error.message
-      });
-
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay = Math.min(delay * 2, maxDelay);
-    }
-  }
-
-  throw lastError;
+    throw lastError;
 };
 
 module.exports = { retry };

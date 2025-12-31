@@ -9,9 +9,11 @@ const logger = require('../shared/utils/logger');
 const validator = require('../shared/utils/validation');
 const errorHandler = require('../shared/utils/errorHandler');
 const { retry } = require('../shared/utils/retry');
+const { upload } = require('../shared/utils/fileUpload');
 
 const BACKEND_URI = `http://${config.apiAddress}/messages`;
 const BACKEND_HEALTH_URI = `http://${config.apiAddress}/health`;
+const BACKEND_WS_URI = `http://${config.apiAddress}`;
 
 app.set('view engine', 'pug');
 app.set('views', path.join(__dirname, 'views'));
@@ -20,9 +22,7 @@ const router = express.Router();
 app.use(router);
 
 app.use(express.static('public'));
-router.use(bodyParser.urlencoded({ extended: false }));
-const multer = require('multer');
-const upload = multer({ dest: 'uploads/' });
+router.use(bodyParser.urlencoded({ extended: true }));
 router.use(bodyParser.json());
 
 // Health check endpoint
@@ -71,9 +71,9 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
   const limit = req.query.limit || 20;
 
   const fetchMessages = async () => {
-    const response = await axios.get(BACKEND_URI, { 
+    const response = await axios.get(BACKEND_URI, {
       params: { page, limit },
-      timeout: 5000 
+      timeout: 5000
     });
     return response.data;
   };
@@ -84,12 +84,12 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
       initialDelay: 1000
     });
 
-    logger.info('Messages retrieved successfully', { 
+    logger.info('Messages retrieved successfully', {
       count: data.messages.length,
-      pagination: data.pagination 
+      pagination: data.pagination
     });
     const result = util.formatMessages(data.messages);
-    res.render('home', { 
+    res.render('home', {
       messages: result,
       pagination: data.pagination,
       currentPage: page
@@ -104,7 +104,7 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
   }
 }));
 
-// Handles POST request to /post with file upload support
+// Handles POST request to /post
 router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (req, res) => {
   logger.info('POST /post request received', { hasFile: !!req.file });
 
@@ -127,10 +127,10 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
     const FormData = require('form-data');
     const fs = require('fs');
     const formData = new FormData();
-    
+
     formData.append('name', validation.data.name);
     formData.append('body', validation.data.body);
-    
+
     if (req.file) {
       formData.append('image', fs.createReadStream(req.file.path), {
         filename: req.file.originalname,
@@ -142,12 +142,12 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
       timeout: 10000,
       headers: formData.getHeaders()
     });
-    
+
     // Clean up temporary file
     if (req.file) {
       fs.unlinkSync(req.file.path);
     }
-    
+
     return response;
   };
 
@@ -160,15 +160,6 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
     logger.info('Message posted successfully');
     res.redirect('/');
   } catch (error) {
-    // Clean up temporary file on error
-    if (req.file) {
-      const fs = require('fs');
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (e) {
-        logger.warn('Failed to clean up temp file', { error: e.message });
-      }
-    }
     logger.error('Failed to post message', { error: error.message });
     res.status(500).render('home', {
       messages: [],
