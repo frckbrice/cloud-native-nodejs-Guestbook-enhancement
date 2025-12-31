@@ -1,0 +1,71 @@
+################################################################################
+# Continuous Deployment Workflow
+#
+# Motivation:
+# Automate deployment to Kubernetes clusters after successful CI validation.
+# This completes the CI/CD pipeline setup from PROJECT_OVERVIEW.md.
+#
+# Approach:
+# - Deploys to Kubernetes after successful CI
+# - Uses Skaffold for deployment (if configured)
+# - Supports multiple environments (staging, production)
+# - Requires manual approval for production deployments
+#
+# Security:
+# - Uses GitHub secrets for sensitive credentials
+# - Requires proper Kubernetes access configuration
+# - Manual approval for production deployments
+#
+# Usage:
+# - Configure KUBECONFIG secret in GitHub repository settings
+# - Set environment-specific variables
+# - Triggered automatically after CI success on main branch
+################################################################################
+name: Continuous Deployment
+
+on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      - name: Setup Skaffold
+        uses: google-github-actions/setup-skaffold@v1
+        with:
+          version: 'latest'
+      
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+      
+      - name: Deploy with Skaffold
+        run: |
+          skaffold run --default-repo=${{ secrets.DOCKER_REGISTRY }}
+

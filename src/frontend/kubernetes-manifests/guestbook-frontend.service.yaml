@@ -6,10 +6,12 @@ metadata:
     app: nodejs-guestbook
     tier: frontend
 spec:
-  type: LoadBalancer
+#  type: LoadBalancer
+  type: ClusterIP  # Changed from LoadBalancer to use Ingress
   selector:
     app: nodejs-guestbook
     tier: frontend
   ports:
   - port: 80
     targetPort: http-server
+    name: http

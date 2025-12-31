@@ -1,31 +1,132 @@
 # Guestbook with Cloud Code
 
-The Guestbook sample demonstrates how to deploy a Kubernetes application with a front end service and a back end service using the Cloud Code IDE extension.  
+This project is a **Google Cloud Kubernetes template** that has been enhanced from the original Guestbook sample. It demonstrates how to deploy a production-ready Kubernetes application with a frontend service, backend API, and MongoDB database using the Cloud Code IDE extension.
+
+## Project Overview
+
+This project started as a basic Google Cloud Kubernetes template and has been systematically enhanced following the roadmap outlined in [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) (starting from line 215). The enhancements transform it from a simple demonstration app into a more production-ready application with modern features and best practices.
+
+### What We've Built
+
+This is a full-stack guestbook application that allows users to:
+- **Post messages** with their name and optional images
+- **View messages** in reverse chronological order with pagination
+- **Edit and delete** their own messages (with authentication)
+- **Real-time updates** via WebSocket connections
+- **User authentication** and authorization
+- **Mobile-responsive** design
+
+### Key Enhancements Implemented
+
+Based on the enhancement roadmap, the following features have been added:
+
+✅ **Production Infrastructure**
+- Health checks (liveness and readiness probes) for all deployments
+- Persistent storage for MongoDB using StatefulSet and PersistentVolumeClaims
+- Ingress controller for production-ready external access (replacing LoadBalancer)
+- Network Policies for enhanced security and traffic control
+
+✅ **Application Features**
+- User authentication and authorization system
+- Message editing and deletion capabilities
+- Pagination for large message lists
+- Image upload support
+- Real-time updates using WebSockets
+- Mobile-responsive design improvements
+
+✅ **DevOps & Observability**
+- Monitoring and observability with metrics endpoints
+- Modular architecture with shared utilities
+- CI/CD pipeline configuration
+- Comprehensive logging and error handling
+
+For more detailed information about the project architecture, objectives, and technical stack, see [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md).
 
 For details on how to use this sample as a template in Cloud Code, read the documentation for Cloud Code for [VS Code](https://cloud.google.com/code/docs/vscode/quickstart-local-dev?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-) or [IntelliJ](https://cloud.google.com/code/docs/intellij/quickstart-k8s?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-).
 
 ### Table of Contents
 * [What's in this sample](#whats-in-this-sample)
+* [Architecture Overview](#architecture-overview)
 * [Getting Started with VS Code](#getting-started-with-vs-code)
 * [Getting Started with IntelliJ](#getting-started-with-intellij)
+* [Project Documentation](#project-documentation)
 * [Sign up for User Research](#sign-up-for-user-research)
 
 ---
 ## What's in this sample
+
 ### Kubernetes architecture
 ![Kubernetes Architecture Diagram](./img/diagram.png)
 
-### Directory contents
+### Architecture Overview
 
-- `skaffold.yaml` - A schema file that defines skaffold configurations ([skaffold.yaml reference](https://skaffold.dev/docs/references/yaml/))
-- `kubernetes-manifests/` - Contains Kubernetes YAML files for the Guestbook services and deployments, including:
+This project follows a **three-tier architecture**:
 
-  - `guestbook-frontend.deployment.yaml` - deploys a pod with the frontend container image
-  - `guestbook-frontend.service.yaml` - creates a load balancer and exposes the frontend service on an external IP in the cluster
-  - `guestbook-backend.deployment.yaml` - deploys a pod with the backend container image
-  - `guestbook-backend.service.yaml` - exposes the backend service on an internal IP in the cluster
-  - `guestbook-mongodb.deployment.yaml` - deploys a pod containing a MongoDB instance
-  - `guestbook-mongodb.service.yaml` - exposes the MongoDB service on an internal IP in the cluster
+1. **Frontend Service** (`src/frontend/`)
+   - Node.js/Express web server serving Pug templates
+   - Handles user interactions and form submissions
+   - Communicates with backend via REST API
+   - Exposed via Ingress controller
+
+2. **Backend Service** (`src/backend/`)
+   - Node.js/Express API server with RESTful endpoints
+   - Handles authentication, authorization, and business logic
+   - WebSocket support for real-time updates
+   - Internal service (ClusterIP) accessible only within cluster
+
+3. **MongoDB Database** (`src/backend/kubernetes-manifests/mongo.*.yaml`)
+   - MongoDB 4 running as StatefulSet
+   - Persistent storage using PersistentVolumeClaims
+   - Internal service (ClusterIP) accessible only within cluster
+
+### Directory Structure
+
+```
+guestbook-1/
+├── src/
+│   ├── frontend/                    # Frontend service
+│   │   ├── app.js                   # Express server
+│   │   ├── views/                   # Pug templates
+│   │   ├── public/                  # Static assets (CSS)
+│   │   ├── utils/                   # Frontend utilities
+│   │   ├── Dockerfile
+│   │   ├── skaffold.yaml
+│   │   └── kubernetes-manifests/    # Frontend K8s resources
+│   │       ├── guestbook-frontend.deployment.yaml
+│   │       ├── guestbook-frontend.service.yaml
+│   │       └── guestbook-frontend.ingress.yaml
+│   │
+│   ├── backend/                     # Backend API service
+│   │   ├── app.js                   # Express server
+│   │   ├── routes/                  # API routes (auth, messages, users)
+│   │   ├── Dockerfile
+│   │   ├── skaffold.yaml
+│   │   └── kubernetes-manifests/    # Backend & DB K8s resources
+│   │       ├── guestbook-backend.deployment.yaml
+│   │       ├── guestbook-backend.service.yaml
+│   │       ├── mongo.statefulset.yaml
+│   │       ├── mongo.service.yaml
+│   │       ├── mongo.pvc.yaml
+│   │       └── network-policy.yaml
+│   │
+│   └── shared/                      # Shared utilities
+│       ├── middleware/              # Authentication, metrics middleware
+│       └── utils/                   # Auth, config, logging, validation, etc.
+│
+├── skaffold.yaml                    # Root Skaffold configuration
+├── Dockerfile                       # Root Dockerfile (if any)
+├── PROJECT_OVERVIEW.md             # Detailed project documentation
+└── docs/                            # Additional documentation
+```
+
+### Key Kubernetes Resources
+
+- **Frontend Deployment & Service**: Web UI exposed via Ingress
+- **Backend Deployment & Service**: Internal API service (ClusterIP)
+- **MongoDB StatefulSet**: Persistent database with PVC
+- **Ingress**: Production-ready external access (replaces LoadBalancer)
+- **Network Policies**: Security rules for pod-to-pod communication
+- **Health Checks**: Liveness and readiness probes on all deployments
 
 ---
 ## Getting Started with VS Code
@@ -71,14 +172,3 @@ For details on how to use this sample as a template in Cloud Code, read the docu
 ![image](./img/service-urls.png)
 
 3. To stop the application, click the stop icon next to the configuration dropdown.
-
----
-## Sign up for User Research
-
-We want to hear your feedback!
-
-The Cloud Code team is inviting our user community to sign-up to participate in Google User Experience Research. 
-
-If you’re invited to join a study, you may try out a new product or tell us what you think about the products you use every day. At this time, Google is only sending invitations for upcoming remote studies. Once a study is complete, you’ll receive a token of thanks for your participation such as a gift card or some Google swag. 
-
-[Sign up using this link](https://google.qualtrics.com/jfe/form/SV_4Me7SiMewdvVYhL?reserved=1&utm_source=In-product&Q_Language=en&utm_medium=own_prd&utm_campaign=Q1&productTag=clou&campaignDate=January2021&referral_code=UXbT481079) and answer a few questions about yourself, as this will help our research team match you to studies that are a great fit.

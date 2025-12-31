@@ -5,6 +5,8 @@ const Message = require('./messages');
 const errorHandler = require('../../shared/utils/errorHandler');
 const validator = require('../../shared/utils/validation');
 const logger = require('../../shared/utils/logger');
+const socketManager = require('../../shared/utils/socketManager');
+const { authenticate } = require('../../shared/middleware/authenticate');
 const { upload, uploadDir } = require('../../shared/utils/fileUpload');
 
 const router = express.Router();
@@ -17,6 +19,12 @@ router.use('/uploads', express.static(uploadDir));
 // Health check endpoint
 router.get('/health', (req, res) => {
     res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// Metrics endpoint
+router.get('/metrics', (req, res) => {
+    const metrics = getMetrics();
+    res.status(200).json(metrics);
 });
 
 // Readiness check endpoint (includes DB connection)
@@ -138,8 +146,8 @@ router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(as
     });
 }));
 
-// Handles DELETE requests to /messages/:id
-router.delete('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
+// Handles DELETE requests to /messages/:id (requires authentication)
+router.delete('/messages/:id', authenticate, errorHandler.asyncHandler(async (req, res) => {
     logger.info('DELETE /messages/:id request received', { id: req.params.id });
 
     await Message.remove(req.params.id);

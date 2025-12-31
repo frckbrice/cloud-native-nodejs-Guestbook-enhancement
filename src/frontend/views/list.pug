@@ -2,8 +2,8 @@ if messages.length > 0
     for msg in messages
         .card.my-3.col-12(data-message-id=msg.id)
             .card-body
-                .d-flex.justify-content-between.align-items-start
-                    div.flex-grow-1
+                .d-flex.flex-column.flex-md-row.justify-content-between.align-items-start
+                    div.flex-grow-1.w-100
                         h5.card-title #{msg.name}
                         h6.card-subtitle.mb-2.text-muted #{msg.timeAgo}
                         br
