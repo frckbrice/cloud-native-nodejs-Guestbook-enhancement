@@ -10,35 +10,40 @@ This project started as a basic Google Cloud Kubernetes template and has been sy
 
 This is a full-stack guestbook application that allows users to:
 - **Post messages** with their name and optional images
+- **Upload images** (JPEG, PNG, GIF, WebP) up to 5MB per message
 - **View messages** in reverse chronological order with pagination
 - **Edit and delete** their own messages (with authentication)
-- **Real-time updates** via WebSocket connections
-- **User authentication** and authorization
+- **Real-time updates** via WebSocket connections (Socket.IO)
+- **User authentication** and authorization (JWT + bcrypt)
 - **Mobile-responsive** design
+- **Monitor application** health and metrics
 
 ### Key Enhancements Implemented
 
 Based on the enhancement roadmap, the following features have been added:
 
-✅ **Production Infrastructure**
+**Production Infrastructure**
 - Health checks (liveness and readiness probes) for all deployments
 - Persistent storage for MongoDB using StatefulSet and PersistentVolumeClaims
 - Ingress controller for production-ready external access (replacing LoadBalancer)
 - Network Policies for enhanced security and traffic control
 
-✅ **Application Features**
-- User authentication and authorization system
+**Application Features**
+- User authentication and authorization system (JWT tokens with bcrypt password hashing)
 - Message editing and deletion capabilities
 - Pagination for large message lists
-- Image upload support
-- Real-time updates using WebSockets
+- Image upload support (multer with file validation and size limits)
+- Real-time updates using WebSockets (Socket.IO)
 - Mobile-responsive design improvements
+- Comprehensive error handling and validation
 
-✅ **DevOps & Observability**
-- Monitoring and observability with metrics endpoints
+**DevOps & Observability**
+- Monitoring and observability with metrics endpoints (`/metrics`)
 - Modular architecture with shared utilities
-- CI/CD pipeline configuration
+- CI/CD pipeline configuration (GitHub Actions)
 - Comprehensive logging and error handling
+- Health check endpoints (`/health`, `/ready`)
+- Docker multi-stage builds for optimization
 
 For more detailed information about the project architecture, objectives, and technical stack, see [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md).
 
@@ -70,8 +75,10 @@ This project follows a **three-tier architecture**:
 
 2. **Backend Service** (`src/backend/`)
    - Node.js/Express API server with RESTful endpoints
-   - Handles authentication, authorization, and business logic
-   - WebSocket support for real-time updates
+   - Handles authentication (JWT + bcrypt), authorization, and business logic
+   - WebSocket support for real-time updates (Socket.IO)
+   - Image upload handling with multer middleware
+   - Metrics collection and monitoring endpoints
    - Internal service (ClusterIP) accessible only within cluster
 
 3. **MongoDB Database** (`src/backend/kubernetes-manifests/mongo.*.yaml`)
@@ -111,7 +118,7 @@ guestbook-1/
 │   │
 │   └── shared/                      # Shared utilities
 │       ├── middleware/              # Authentication, metrics middleware
-│       └── utils/                   # Auth, config, logging, validation, etc.
+│       └── utils/                   # Auth, config, logging, validation, fileUpload, etc.
 │
 ├── skaffold.yaml                    # Root Skaffold configuration
 ├── Dockerfile                       # Root Dockerfile (if any)
@@ -127,6 +134,31 @@ guestbook-1/
 - **Ingress**: Production-ready external access (replaces LoadBalancer)
 - **Network Policies**: Security rules for pod-to-pod communication
 - **Health Checks**: Liveness and readiness probes on all deployments
+
+### Technology Stack
+
+**Backend Dependencies:**
+- `express` - Web framework
+- `mongoose` - MongoDB ODM
+- `bcrypt` - Password hashing
+- `jsonwebtoken` - JWT authentication
+- `multer` - File upload handling
+- `socket.io` - WebSocket real-time communication
+
+**Frontend Dependencies:**
+- `express` - Web server
+- `pug` - Template engine
+- `axios` - HTTP client
+- `multer` - File upload handling
+- `form-data` - FormData support
+- `socket.io-client` - WebSocket client
+
+**Infrastructure:**
+- Kubernetes (minikube for local development)
+- Docker containers
+- MongoDB 4 (StatefulSet with persistent storage)
+- Skaffold for development workflow
+- GitHub Actions for CI/CD
 
 ---
 ## Getting Started with VS Code
