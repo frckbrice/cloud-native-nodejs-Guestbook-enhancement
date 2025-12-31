@@ -130,6 +130,7 @@ const findAll = async (options = {}) => {
                 id: msg._id.toString(),
                 name: msg.name,
                 body: msg.body,
+                imageUrl: msg.imageUrl,
                 timestamp: msg.createdAt || msg._id.getTimestamp()
             })),
             pagination: {
@@ -164,6 +165,7 @@ const findById = async (id) => {
             id: message._id.toString(),
             name: message.name,
             body: message.body,
+            imageUrl: message.imageUrl,
             timestamp: message.createdAt || message._id.getTimestamp()
         };
     } catch (error) {

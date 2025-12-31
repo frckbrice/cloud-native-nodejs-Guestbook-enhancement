@@ -21,6 +21,8 @@ app.use(router);
 
 app.use(express.static('public'));
 router.use(bodyParser.urlencoded({ extended: false }));
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
 router.use(bodyParser.json());
 
 // Health check endpoint
@@ -102,9 +104,9 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
   }
 }));
 
-// Handles POST request to /post
-router.post('/post', errorHandler.asyncHandler(async (req, res) => {
-  logger.info('POST /post request received');
+// Handles POST request to /post with file upload support
+router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (req, res) => {
+  logger.info('POST /post request received', { hasFile: !!req.file });
 
   const validation = validator.validateMessageData({
     name: req.body.name,
@@ -122,10 +124,30 @@ router.post('/post', errorHandler.asyncHandler(async (req, res) => {
   }
 
   const postMessage = async () => {
-    const response = await axios.post(BACKEND_URI, validation.data, {
-      timeout: 5000,
-      headers: { 'Content-Type': 'application/json' }
+    const FormData = require('form-data');
+    const fs = require('fs');
+    const formData = new FormData();
+    
+    formData.append('name', validation.data.name);
+    formData.append('body', validation.data.body);
+    
+    if (req.file) {
+      formData.append('image', fs.createReadStream(req.file.path), {
+        filename: req.file.originalname,
+        contentType: req.file.mimetype
+      });
+    }
+
+    const response = await axios.post(BACKEND_URI, formData, {
+      timeout: 10000,
+      headers: formData.getHeaders()
     });
+    
+    // Clean up temporary file
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+    
     return response;
   };
 
@@ -138,6 +160,15 @@ router.post('/post', errorHandler.asyncHandler(async (req, res) => {
     logger.info('Message posted successfully');
     res.redirect('/');
   } catch (error) {
+    // Clean up temporary file on error
+    if (req.file) {
+      const fs = require('fs');
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e) {
+        logger.warn('Failed to clean up temp file', { error: e.message });
+      }
+    }
     logger.error('Failed to post message', { error: error.message });
     res.status(500).render('home', {
       messages: [],
