@@ -68,7 +68,7 @@ html
                         button.close(type='button' data-dismiss='modal' aria-label='Close')
                             span(aria-hidden='true') ×
                     .modal-body
-                        form#editForm
+                        form#editForm(enctype='multipart/form-data')
                             input#editId(type='hidden')
                             .form-group
                                 label(for='editName') Your Name
@@ -76,6 +76,10 @@ html
                             .form-group
                                 label(for='editBody') Message
                                 textarea#editBody.form-control(name='body' rows='3' required)
+                            .form-group
+                                label(for='editImage') Image (optional)
+                                input#editImage.form-control-file(type='file' name='image' accept='image/*')
+                                small.form-text.text-muted Current image will be replaced if a new one is uploaded
                     .modal-footer
                         button.btn.btn-secondary(type='button' data-dismiss='modal') Cancel
                         button.btn.btn-primary(type='submit' form='editForm') Save Changes
@@ -115,16 +119,21 @@ html
                 $('#editForm').on('submit', function(e) {
                     e.preventDefault();
                     const id = $('#editId').val();
-                    const data = {
-                        name: $('#editName').val(),
-                        body: $('#editBody').val()
-                    };
+                    const formData = new FormData();
+                    formData.append('name', $('#editName').val());
+                    formData.append('body', $('#editBody').val());
+                    
+                    const imageFile = $('#editImage')[0].files[0];
+                    if (imageFile) {
+                        formData.append('image', imageFile);
+                    }
                     
                     $.ajax({
                         url: `/messages/${id}`,
                         type: 'PUT',
-                        contentType: 'application/json',
-                        data: JSON.stringify(data),
+                        processData: false,
+                        contentType: false,
+                        data: formData,
                         success: function() {
                             $('#editModal').modal('hide');
                             location.reload();
