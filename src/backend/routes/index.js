@@ -98,13 +98,19 @@ router.post('/messages', authenticate, upload.single('image'), errorHandler.asyn
 
     const message = await Message.create(dataToSave);
     logger.info('Message created successfully', { messageId: message._id });
-    res.status(201).json({
+
+    const messageResponse = {
         id: message._id,
         name: message.name,
         body: message.body,
         imageUrl: message.imageUrl,
         timestamp: message.createdAt
-    });
+    };
+
+    // Broadcast real-time update
+    socketManager.broadcastMessageCreated(messageResponse);
+
+    res.status(201).json(messageResponse);
 }));
 
 // Handles PUT requests to /messages/:id (update) with optional image upload (requires authentication)
@@ -138,13 +144,19 @@ router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.a
 
     const message = await Message.update(req.params.id, dataToUpdate);
     logger.info('Message updated successfully', { messageId: req.params.id });
-    res.status(200).json({
+
+    const messageResponse = {
         id: message._id,
         name: message.name,
         body: message.body,
         imageUrl: message.imageUrl,
         timestamp: message.updatedAt || message.createdAt
-    });
+    };
+
+    // Broadcast real-time update
+    socketManager.broadcastMessageUpdated(messageResponse);
+
+    res.status(200).json(messageResponse);
 }));
 
 // Handles DELETE requests to /messages/:id (requires authentication)
@@ -153,6 +165,10 @@ router.delete('/messages/:id', authenticate, errorHandler.asyncHandler(async (re
 
     await Message.remove(req.params.id);
     logger.info('Message deleted successfully', { messageId: req.params.id });
+
+    // Broadcast real-time update
+    socketManager.broadcastMessageDeleted(req.params.id);
+
     res.status(204).send();
 }));
 

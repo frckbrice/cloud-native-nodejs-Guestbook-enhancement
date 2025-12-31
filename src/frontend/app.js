@@ -13,6 +13,7 @@ const { upload } = require('../shared/utils/fileUpload');
 
 const BACKEND_URI = `http://${config.apiAddress}/messages`;
 const BACKEND_HEALTH_URI = `http://${config.apiAddress}/health`;
+const BACKEND_WS_URI = `http://${config.apiAddress}`;
 
 app.set('view engine', 'pug');
 app.set('views', path.join(__dirname, 'views'));
