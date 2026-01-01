@@ -1,18 +1,26 @@
-form.form-inline(action="/post", method="POST", enctype="multipart/form-data")
-    label.sr-only(for="name") Name
-    .input-group.mb-2.mr-sm-2.flex-fill
-        .input-group-prepend
-            .input-group-text Your Name
-        input#name.form-control(type="text", name="name", required="", placeholder="Enter your name")
-    label.sr-only(for="message") Message
-    .input-group.mb-2.mr-sm-2.flex-fill
-        .input-group-prepend
-            .input-group-text Message
-        input#message.form-control(type="text", name="message", required="", placeholder="Enter your message")
-    .input-group.mb-2.mr-sm-2.flex-fill
-        .input-group-prepend
-            .input-group-text Image
-        .custom-file
-            input#image.custom-file-input(type="file", name="image", accept="image/*")
-            label.custom-file-label(for="image") Choose image (optional)
-    button.btn.btn-primary.mb-2.w-100.w-md-auto(type="submit") Post to Guestbook
+if currentUser
+    form.form-inline(action="/post", method="POST", enctype="multipart/form-data")
+        label.sr-only(for="name") Name
+        .input-group.mb-2.mr-sm-2.flex-fill
+            .input-group-prepend
+                .input-group-text Your Name
+            input#name.form-control(type="text", name="name", required="", placeholder="Enter your name", value=currentUser.username)
+        label.sr-only(for="message") Message
+        .input-group.mb-2.mr-sm-2.flex-fill
+            .input-group-prepend
+                .input-group-text Message
+            input#message.form-control(type="text", name="message", required="", placeholder="Enter your message")
+        .input-group.mb-2.mr-sm-2.flex-fill
+            .input-group-prepend
+                .input-group-text Image
+            .custom-file
+                input#image.custom-file-input(type="file", name="image", accept="image/*")
+                label.custom-file-label(for="image") Choose image (optional)
+        button.btn.btn-primary.mb-2.w-100.w-md-auto(type="submit") Post to Guestbook
+else
+    .alert.alert-info(role='alert')
+        | Please 
+        a.alert-link(href='javascript:void(0);' data-toggle='modal' data-target='#loginModal') login
+        |  or 
+        a.alert-link(href='/register') register
+        |  to post a message.

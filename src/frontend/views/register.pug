@@ -1,0 +1,39 @@
+doctype html
+html
+    head
+        meta(charset='utf-8')
+        title Register - Guestbook
+        meta(name='viewport', content='width=device-width, initial-scale=1')
+        link(rel='stylesheet', href='https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css', integrity='sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T', crossorigin='anonymous')
+        link(rel='stylesheet', href='css/style.css')
+        link(rel='stylesheet', href='https://fonts.googleapis.com/css?family=Roboto')
+    body
+        .header
+            .container
+                h1 
+                    a(href='/') My Guestbook
+        .container.mt-5
+            .row.justify-content-center
+                .col-md-6
+                    .card
+                        .card-header
+                            h4 Register
+                        .card-body
+                            if error
+                                .alert.alert-danger(role='alert') #{error}
+                            form(method='POST' action='/register')
+                                .form-group
+                                    label(for='username') Username
+                                    input#username.form-control(type='text' name='username' required)
+                                .form-group
+                                    label(for='email') Email
+                                    input#email.form-control(type='email' name='email' required)
+                                .form-group
+                                    label(for='password') Password
+                                    input#password.form-control(type='password' name='password' required)
+                                    small.form-text.text-muted Password must be at least 8 characters with uppercase, lowercase, and number
+                                button.btn.btn-primary.btn-block(type='submit') Register
+                                .mt-3.text-center
+                                    | Already have an account? 
+                                    a(href='/') Login
+

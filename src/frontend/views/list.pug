@@ -9,10 +9,11 @@ if messages.length > 0
                         br
                         p.card-text.message-body #{msg.body}
                         if msg.imageUrl
-                            img.img-fluid.mt-2(src=msg.imageUrl, alt="Message image", style="max-width: 100%; max-height: 300px; border-radius: 4px; object-fit: contain;")
-                    .btn-group.mt-2.mt-md-0.ml-md-2(role='group' style="min-width: 120px;")
-                        button.btn.btn-sm.btn-outline-primary.edit-btn(type='button' data-id=msg.id data-name=msg.name data-body=msg.body) Edit
-                        button.btn.btn-sm.btn-outline-danger.delete-btn(type='button' data-id=msg.id) Delete
+                            img.img-fluid.mt-2(src=msg.imageUrl, alt="Message image", style="max-width: 100%; max-height: 300px; border-radius: 4px; object-fit: contain;" onerror="this.style.display='none'")
+                    if currentUser && msg.userId && msg.userId === currentUser.id
+                        .btn-group.mt-2.mt-md-0.ml-md-2(role='group' style="min-width: 120px;")
+                            button.btn.btn-sm.btn-outline-primary.edit-btn(type='button' data-id=msg.id data-name=msg.name data-body=msg.body) Edit
+                            button.btn.btn-sm.btn-outline-danger.delete-btn(type='button' data-id=msg.id) Delete
 
 else
     p.alert.alert-info(role='alert')

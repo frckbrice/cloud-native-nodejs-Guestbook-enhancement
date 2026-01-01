@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const bodyParser = require('body-parser');
 const app = express();
 const routes = require('./routes');
 const authRoutes = require('./routes/auth');
@@ -8,6 +9,10 @@ const config = require('../shared/utils/config');
 const logger = require('../shared/utils/logger');
 const socketManager = require('../shared/utils/socketManager');
 const { metricsMiddleware } = require('../shared/middleware/metrics');
+
+// Apply body parser globally to ensure all routes can parse JSON and urlencoded data
+app.use(bodyParser.json({ limit: '10mb' })); // set limit to 10mb to handle large file uploads against DDoS
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 // Apply metrics middleware globally
 app.use(metricsMiddleware);

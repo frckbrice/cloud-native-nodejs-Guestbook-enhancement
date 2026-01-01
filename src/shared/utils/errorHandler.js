@@ -43,10 +43,17 @@ const errorHandler = {
             statusCode = 400;
             message = error.message || 'Validation error';
             errorType = 'ValidationError';
-        } else if (error.name === 'MongoError' || error.name === 'MongooseError') {
-            statusCode = 503;
-            message = 'Database service unavailable';
-            errorType = 'DatabaseError';
+        } else if (error.name === 'MongoError' || error.name === 'MongooseError' || error.name === 'MongoServerError') {
+            // Handle duplicate key errors (e.g., username/email already exists)
+            if (error.code === 11000 || error.code === 11001) {
+                statusCode = 409;
+                message = error.message || 'Duplicate value detected';
+                errorType = 'ConflictError';
+            } else {
+                statusCode = 503;
+                message = 'Database service unavailable';
+                errorType = 'DatabaseError';
+            }
         } else if (error.statusCode) {
             statusCode = error.statusCode;
             message = error.message || message;
@@ -54,12 +61,19 @@ const errorHandler = {
             message = error.message;
         }
 
-        return {
+        const errorResponse = {
             statusCode,
             message,
             error: errorType,
             timestamp: new Date().toISOString()
         };
+
+        // Include validation details if available
+        if (error.details && errorType === 'ValidationError') {
+            errorResponse.details = error.details;
+        }
+
+        return errorResponse;
     },
 
     /**
@@ -75,7 +89,11 @@ const errorHandler = {
             error: errorResponse.error,
             message: errorResponse.message,
             statusCode: errorResponse.statusCode,
-            stack: error.stack
+            errorName: error.name,
+            errorCode: error.code,
+            details: error.details,
+            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+            originalMessage: error.message
         });
 
         res.status(errorResponse.statusCode).json(errorResponse);

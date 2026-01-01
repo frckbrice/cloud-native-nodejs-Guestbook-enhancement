@@ -8,56 +8,84 @@ html
         link(rel='stylesheet', href='css/style.css')
         link(rel='stylesheet', href='https://fonts.googleapis.com/css?family=Roboto')
         script(src='https://code.jquery.com/jquery-3.6.0.min.js')
-        script(src='https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/js/bootstrap.bundle.min.js')
+        script(src='https://stackpath.bootstrapcdn.com/bootstrap/4.6.0/js/bootstrap.bundle.min.js', integrity='sha384-Piv4xVNRyMGpqkS2by6br4gNJ7DXjqk09RmUpJ8jgGtD7zP9yug3goQfGII0yAns', crossorigin='anonymous')
         script(src='https://cdn.socket.io/4.7.2/socket.io.min.js')
         script.
-            // Update custom file input label
-            $('.custom-file-input').on('change', function() {
-                let fileName = $(this).val().split('\\').pop();
-                $(this).next('.custom-file-label').html(fileName || 'Choose image (optional)');
-            });
+            // Store auth token from server (if available)
+            const authToken = !{token ? JSON.stringify(token) : 'null'};
+            const currentUserId = !{currentUser ? JSON.stringify(currentUser.id) : 'null'};
             
             // Initialize Socket.IO for real-time updates
             const socket = io(window.location.origin.replace(/:\d+$/, ':8080'));
             
             socket.on('connect', function() {
-                console.log('Connected to real-time updates');
+                // Connected to real-time updates
             });
             
             socket.on('disconnect', function() {
-                console.log('Disconnected from real-time updates');
+                // Disconnected from real-time updates
             });
             
             // Listen for new messages
             socket.on('message:created', function(message) {
-                console.log('New message received:', message);
                 // Reload page to show new message (or implement dynamic insertion)
                 location.reload();
             });
             
             // Listen for message updates
             socket.on('message:updated', function(message) {
-                console.log('Message updated:', message);
                 location.reload();
             });
             
             // Listen for message deletions
             socket.on('message:deleted', function(data) {
-                console.log('Message deleted:', data.id);
                 location.reload();
             });
     body
         .header
             .container
-                h1 
-                    a(href='/') My Guestbook
-                a(href='https://github.com/GoogleCloudPlatform/cloud-code-samples').text-muted View on Github
+                .d-flex.justify-content-between.align-items-center
+                    div
+                        h1 
+                            a(href='/') My Guestbook
+                        a(href='https://github.com/GoogleCloudPlatform/cloud-code-samples').text-muted View on Github
+                    div
+                        if currentUser
+                            span.mr-3 Welcome, #{currentUser.username}!
+                            form.d-inline(method='POST' action='/logout')
+                                input(type='hidden' name='_csrf' value=csrfToken)
+                                button.btn.btn-sm.btn-outline-secondary(type='submit') Logout
+                        else
+                            button.btn.btn-sm.btn-primary.mr-2(type='button' data-toggle='modal' data-target='#loginModal') Login
+                            a.btn.btn-sm.btn-outline-primary(href='/register') Register
         .container.posts.mt-0
             if error
                 .alert.alert-danger(role='alert')
                     | #{error}
             include new.pug
             include list.pug
+        
+        // Login Modal
+        #loginModal.modal.fade(tabindex='-1' role='dialog')
+            .modal-dialog(role='document')
+                .modal-content
+                    .modal-header
+                        h5.modal-title Login
+                        button.close(type='button' data-dismiss='modal' aria-label='Close')
+                            span(aria-hidden='true') ×
+                    .modal-body
+                        form#loginForm(method='POST' action='/login')
+                            // Early validation: CSRF check happens before any login processing
+                            input(type='hidden' name='_csrf' value=csrfToken)
+                            .form-group
+                                label(for='loginUsername') Username
+                                input#loginUsername.form-control(type='text' name='username' required)
+                            .form-group
+                                label(for='loginPassword') Password
+                                input#loginPassword.form-control(type='password' name='password' required)
+                            .d-flex.justify-content-end.mt-4
+                                button.btn.btn-secondary.mr-2(type='button' data-dismiss='modal') Cancel
+                                button.btn.btn-primary(type='submit') Login
         
         // Edit Message Modal
         #editModal.modal.fade(tabindex='-1' role='dialog')
@@ -85,26 +113,147 @@ html
                         button.btn.btn-primary(type='submit' form='editForm') Save Changes
         
         script.
+            // Function to open login modal
+            function openLoginModal() {
+                var $modal = $('#loginModal');
+                if (!$modal.length) return false;
+                
+                // Try Bootstrap modal, fallback to CSS if it fails
+                try {
+                    $modal.modal('show');
+                    return true;
+                } catch (e) {
+                    // Bootstrap modal not available, use CSS fallback
+                    $modal.css('display', 'block');
+                    $modal.addClass('show');
+                    $('body').addClass('modal-open');
+                    if ($('.modal-backdrop').length === 0) {
+                        $('body').append('<div class="modal-backdrop fade show"></div>');
+                    }
+                    return true;
+                }
+            }
+            
             $(document).ready(function() {
-                // Delete message
-                $('.delete-btn').on('click', function() {
+                // Set up close handlers for login modal (only once)
+                if (!$('#loginModal').data('fallback-handlers-setup')) {
+                    $('#loginModal .close, #loginModal [data-dismiss="modal"]').on('click.loginModalFallback', function(e) {
+                        e.preventDefault();
+                        var $modal = $('#loginModal');
+                        try {
+                            $modal.modal('hide');
+                        } catch (e) {
+                            // CSS fallback
+                            $modal.css('display', 'none');
+                            $modal.removeClass('show');
+                            $('body').removeClass('modal-open');
+                            $('.modal-backdrop').remove();
+                        }
+                        return false;
+                    });
+                    
+                    $(document).on('click.loginModalBackdrop', '.modal-backdrop', function() {
+                        var $modal = $('#loginModal');
+                        if ($modal.hasClass('show')) {
+                            try {
+                                $modal.modal('hide');
+                            } catch (e) {
+                                // CSS fallback
+                                $modal.css('display', 'none');
+                                $modal.removeClass('show');
+                                $('body').removeClass('modal-open');
+                                $('.modal-backdrop').remove();
+                            }
+                        }
+                    });
+                    
+                    $('#loginModal').data('fallback-handlers-setup', true);
+                }
+                
+                // Update custom file input label
+                $('.custom-file-input').on('change', function() {
+                    let fileName = $(this).val().split('\\').pop();
+                    let label = $(this).siblings('.custom-file-label').first();
+                    if (label.length === 0) {
+                        // Fallback: find label by 'for' attribute
+                        let inputId = $(this).attr('id');
+                        label = $('label[for="' + inputId + '"]');
+                    }
+                    if (label.length > 0) {
+                        label.text(fileName || 'Choose image (optional)');
+                    }
+                });
+                
+                // Get auth token - try from server-provided variable first, then from cookie
+                function getAuthToken() {
+                    // First try the token passed from server
+                    if (authToken) {
+                        return authToken;
+                    }
+                    // Fallback: try to read from clientToken cookie
+                    const cookies = document.cookie.split(';');
+                    for (let cookie of cookies) {
+                        const [name, value] = cookie.trim().split('=');
+                        if (name === 'clientToken') {
+                            return value;
+                        }
+                    }
+                    return null;
+                }
+                
+                // Function to handle authentication errors
+                function handleAuthError(message) {
+                    // Clear any invalid tokens
+                    document.cookie = 'clientToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                    // Show login modal
+                    if (typeof openLoginModal === 'function') {
+                        openLoginModal();
+                    } else {
+                        $('#loginModal').modal('show');
+                    }
+                    // Show user-friendly message
+                    alert('Your session has expired. Please login again.');
+                }
+                
+                // Handle link clicks to open modal (button should work automatically with data-toggle)
+                $(document).on('click', 'a[data-target="#loginModal"]', function(e) {
+                    e.preventDefault();
+                    openLoginModal();
+                    return false;
+                }); 
+
+                // Delete message - use event delegation for dynamically added buttons
+                $(document).on('click', '.delete-btn', function() {
                     const messageId = $(this).data('id');
+                    const token = getAuthToken();
+                    if (!token) {
+                        handleAuthError('No authentication token available');
+                        return;
+                    }
                     if (confirm('Are you sure you want to delete this message?')) {
                         $.ajax({
                             url: `/messages/${messageId}`,
                             type: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            },
                             success: function() {
                                 location.reload();
                             },
                             error: function(xhr) {
-                                alert('Failed to delete message. Please try again.');
+                                if (xhr.status === 401) {
+                                    handleAuthError('Authentication failed - token may be expired');
+                                } else {
+                                    const errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.error || 'Failed to delete message. Please try again.';
+                                    alert(errorMsg);
+                                }
                             }
                         });
                     }
                 });
                 
-                // Edit message
-                $('.edit-btn').on('click', function() {
+                // Edit message - use event delegation for dynamically added buttons
+                $(document).on('click', '.edit-btn', function() {
                     const id = $(this).data('id');
                     const name = $(this).data('name');
                     const body = $(this).data('body');
@@ -112,16 +261,81 @@ html
                     $('#editId').val(id);
                     $('#editName').val(name);
                     $('#editBody').val(body);
-                    $('#editModal').modal('show');
+                    
+                    // Function to show edit modal with fallback
+                    function showEditModal() {
+                        var $modal = $('#editModal');
+                        if (!$modal.length) {
+                            return false;
+                        }
+                        
+                        // Try Bootstrap modal, fallback to CSS if it fails
+                        try {
+                            $modal.modal('show');
+                            return true;
+                        } catch (e) {
+                            // Bootstrap modal not available, use CSS fallback
+                            $modal.css('display', 'block');
+                            $modal.addClass('show');
+                            $('body').addClass('modal-open');
+                            if ($('.modal-backdrop').length === 0) {
+                                $('body').append('<div class="modal-backdrop fade show"></div>');
+                            }
+                            return true;
+                        }
+                    }
+                    
+                    // Set up close handlers for CSS fallback (only once)
+                    if (!$('#editModal').data('fallback-handlers-setup')) {
+                        $('#editModal .close, #editModal [data-dismiss="modal"]').on('click.editModalFallback', function() {
+                            var $modal = $('#editModal');
+                            try {
+                                $modal.modal('hide');
+                            } catch (e) {
+                                // CSS fallback
+                                $modal.css('display', 'none');
+                                $modal.removeClass('show');
+                                $('body').removeClass('modal-open');
+                                $('.modal-backdrop').remove();
+                            }
+                        });
+                        
+                        $(document).on('click.editModalBackdrop', '.modal-backdrop', function() {
+                            var $modal = $('#editModal');
+                            if ($modal.hasClass('show')) {
+                                try {
+                                    $modal.modal('hide');
+                                } catch (e) {
+                                    // CSS fallback
+                                    $modal.css('display', 'none');
+                                    $modal.removeClass('show');
+                                    $('body').removeClass('modal-open');
+                                    $('.modal-backdrop').remove();
+                                }
+                            }
+                        });
+                        
+                        $('#editModal').data('fallback-handlers-setup', true);
+                    }
+                    
+                    showEditModal();
                 });
                 
                 // Submit edit form
                 $('#editForm').on('submit', function(e) {
                     e.preventDefault();
                     const id = $('#editId').val();
+                    const name = $('#editName').val();
+                    const body = $('#editBody').val();
+                    const token = getAuthToken();
+                    
+                    if (!token) {
+                        handleAuthError('No authentication token available');
+                        return;
+                    }
                     const formData = new FormData();
-                    formData.append('name', $('#editName').val());
-                    formData.append('body', $('#editBody').val());
+                    formData.append('name', name);
+                    formData.append('body', body);
                     
                     const imageFile = $('#editImage')[0].files[0];
                     if (imageFile) {
@@ -133,13 +347,29 @@ html
                         type: 'PUT',
                         processData: false,
                         contentType: false,
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
                         data: formData,
-                        success: function() {
-                            $('#editModal').modal('hide');
+                        success: function(response) {
+                            // Try Bootstrap modal, fallback to CSS
+                            try {
+                                $('#editModal').modal('hide');
+                            } catch (e) {
+                                // CSS fallback
+                                $('#editModal').css('display', 'none');
+                                $('#editModal').removeClass('show');
+                                $('body').removeClass('modal-open');
+                                $('.modal-backdrop').remove();
+                            }
                             location.reload();
                         },
                         error: function(xhr) {
-                            alert('Failed to update message. Please try again.');
+                            if (xhr.status === 401) {
+                                alert('Please login to edit messages.');
+                            } else {
+                                alert('Failed to update message. Please try again.');
+                            }
                         }
                     });
                 });

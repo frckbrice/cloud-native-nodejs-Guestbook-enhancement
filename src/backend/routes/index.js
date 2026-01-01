@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
+const fs = require('fs').promises;
 const Message = require('./messages');
 const errorHandler = require('../../shared/utils/errorHandler');
 const validator = require('../../shared/utils/validation');
@@ -45,31 +46,34 @@ router.get('/ready', async (req, res) => {
 
 // Handles GET requests to /messages with pagination
 router.get('/messages', errorHandler.asyncHandler(async (req, res) => {
-    logger.info('GET /messages request received', { query: req.query });
-
     const result = await Message.findAll({
         page: req.query.page,
         limit: req.query.limit
-    });
-    logger.info('Messages retrieved successfully', {
-        count: result.messages.length,
-        pagination: result.pagination
     });
     res.status(200).json(result);
 }));
 
 // Handles GET requests to /messages/:id
 router.get('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
-    logger.info('GET /messages/:id request received', { id: req.params.id });
-
     const message = await Message.findById(req.params.id);
-    logger.info('Message retrieved successfully', { id: req.params.id });
     res.status(200).json(message);
 }));
 
 // Handles POST requests to /messages with optional image upload (requires authentication)
 router.post('/messages', authenticate, upload.single('image'), errorHandler.asyncHandler(async (req, res) => {
-    logger.info('POST /messages request received', { hasFile: !!req.file });
+    // Helper function to clean up uploaded file
+    const cleanupUploadedFile = async () => {
+        if (req.file && req.file.path) {
+            try {
+                await fs.unlink(req.file.path);
+            } catch (error) {
+                // Ignore ENOENT errors (file already deleted)
+                if (error.code !== 'ENOENT') {
+                    logger.warn('Failed to clean up uploaded file', { error: error.message });
+                }
+            }
+        }
+    };
 
     const messageData = {
         name: req.body.name,
@@ -79,31 +83,27 @@ router.post('/messages', authenticate, upload.single('image'), errorHandler.asyn
     const validation = validator.validateMessageData(messageData);
     if (!validation.valid) {
         // Clean up uploaded file if validation fails
-        if (req.file) {
-            const fs = require('fs');
-            fs.unlinkSync(req.file.path);
-        }
+        await cleanupUploadedFile();
         const error = new Error('Validation failed');
         error.name = 'ValidationError';
         error.details = validation.errors;
         throw error;
     }
 
-    // Add image URL if file was uploaded
-    const dataToSave = { ...validation.data };
+    // Add image URL if file was uploaded and include userId
+    const dataToSave = { ...validation.data, userId: req.userId };
     if (req.file) {
         dataToSave.imageUrl = `/uploads/${req.file.filename}`;
-        logger.info('Image uploaded', { filename: req.file.filename });
     }
 
     const message = await Message.create(dataToSave);
-    logger.info('Message created successfully', { messageId: message._id });
 
     const messageResponse = {
         id: message._id,
         name: message.name,
         body: message.body,
         imageUrl: message.imageUrl,
+        userId: message.userId ? message.userId.toString() : null,
         timestamp: message.createdAt
     };
 
@@ -115,7 +115,19 @@ router.post('/messages', authenticate, upload.single('image'), errorHandler.asyn
 
 // Handles PUT requests to /messages/:id (update) with optional image upload (requires authentication)
 router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.asyncHandler(async (req, res) => {
-    logger.info('PUT /messages/:id request received', { id: req.params.id, hasFile: !!req.file });
+    // Helper function to clean up uploaded file
+    const cleanupUploadedFile = async () => {
+        if (req.file && req.file.path) {
+            try {
+                await fs.unlink(req.file.path);
+            } catch (error) {
+                // Ignore ENOENT errors (file already deleted)
+                if (error.code !== 'ENOENT') {
+                    logger.warn('Failed to clean up uploaded file', { error: error.message });
+                }
+            }
+        }
+    };
 
     const messageData = {
         name: req.body.name,
@@ -125,10 +137,7 @@ router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.a
     const validation = validator.validateMessageData(messageData);
     if (!validation.valid) {
         // Clean up uploaded file if validation fails
-        if (req.file) {
-            const fs = require('fs');
-            fs.unlinkSync(req.file.path);
-        }
+        await cleanupUploadedFile();
         const error = new Error('Validation failed');
         error.name = 'ValidationError';
         error.details = validation.errors;
@@ -139,17 +148,32 @@ router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.a
     const dataToUpdate = { ...validation.data };
     if (req.file) {
         dataToUpdate.imageUrl = `/uploads/${req.file.filename}`;
-        logger.info('Image uploaded for update', { filename: req.file.filename });
     }
 
-    const message = await Message.update(req.params.id, dataToUpdate);
-    logger.info('Message updated successfully', { messageId: req.params.id });
+    // Atomically update only if user owns the message
+    const updatedMessage = await Message.messageModel.findOneAndUpdate(
+        { _id: req.params.id, userId: req.userId },
+        dataToUpdate,
+        { new: true, runValidators: true }
+    );
+
+    if (!updatedMessage) {
+        await cleanupUploadedFile();
+        // Could be 404 (not found) or 403 (not owned) - return 404 for security
+        logger.warn('PUT /messages/:id - Message not found or not owned');
+        const error = new Error('Message not found');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const message = updatedMessage;
 
     const messageResponse = {
         id: message._id,
         name: message.name,
         body: message.body,
         imageUrl: message.imageUrl,
+        userId: message.userId ? message.userId.toString() : null,
         timestamp: message.updatedAt || message.createdAt
     };
 
@@ -161,10 +185,20 @@ router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.a
 
 // Handles DELETE requests to /messages/:id (requires authentication)
 router.delete('/messages/:id', authenticate, errorHandler.asyncHandler(async (req, res) => {
-    logger.info('DELETE /messages/:id request received', { id: req.params.id });
+    // Atomically delete only if user owns the message
+    const deletedMessage = await Message.messageModel.findOneAndDelete(
+        { _id: req.params.id, userId: req.userId }
+    );
 
-    await Message.remove(req.params.id);
-    logger.info('Message deleted successfully', { messageId: req.params.id });
+    if (!deletedMessage) {
+        // Could be 404 (not found) or 403 (not owned) - return 404 for security
+        logger.warn('DELETE /messages/:id - Message not found or not owned');
+        const error = new Error('Message not found');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    logger.info('DELETE /messages/:id - Message deleted successfully');
 
     // Broadcast real-time update
     socketManager.broadcastMessageDeleted(req.params.id);

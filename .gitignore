@@ -2,8 +2,13 @@
 
 
 
-docs/
-scripts/
+.idea/
+.vscode/
+.readmes/
+
+**/**/.node_modules/
+
+
 
 .env
 .env.local
@@ -23,3 +28,5 @@ node_modules/
 .github/workflows/*.local.yml
 *.log
 .DS_Store
+kubeconfig_base64.txt
+GITHUB_SECRETS_SETUP.md

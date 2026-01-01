@@ -29,21 +29,75 @@ const logger = require('./logger');
 
 class Config {
   constructor() {
+    this._serviceType = this._detectServiceType();
     this.validate();
   }
 
+  _detectServiceType() {
+    // Check the main entry point to determine if this is frontend or backend
+    // This is more reliable than checking the stack trace
+    if (require.main) {
+      const mainPath = require.main.filename || '';
+      // Check for /frontend or /backend in the path
+      // This works for both /frontend/app.js and /frontend/app.js patterns
+      if (mainPath.includes('/frontend')) {
+        return 'frontend';
+      } else if (mainPath.includes('/backend')) {
+        return 'backend';
+      }
+    }
+
+    // Fallback: check the stack trace as a secondary method
+    try {
+      const stack = new Error().stack;
+      if (stack.includes('/frontend')) {
+        return 'frontend';
+      } else if (stack.includes('/backend')) {
+        return 'backend';
+      }
+    } catch (e) {
+      // Ignore stack trace errors
+    }
+
+    // Default to backend if we can't determine (backwards compatibility)
+    return 'backend';
+  }
+
   validate() {
-    const required = ['PORT'];
-    const missing = required.filter(key => !process.env[key]);
-    
-    if (missing.length > 0) {
-      const error = new Error(`Missing required environment variables: ${missing.join(', ')}`);
-      logger.error('Configuration validation failed', { missing });
+    // Accept either service-specific port OR generic PORT
+    const hasPort = this._hasPort();
+
+    if (!hasPort) {
+      const expectedPorts = this._serviceType === 'frontend'
+        ? 'FRONTEND_PORT or PORT'
+        : 'BACKEND_PORT or PORT';
+      const error = new Error(`Missing required environment variables: ${expectedPorts}`);
+      logger.error('Configuration validation failed', {
+        serviceType: this._serviceType,
+        expectedPorts
+      });
       throw error;
     }
   }
 
+  _hasPort() {
+    // Check if we have either a service-specific port or the generic PORT
+    if (this._serviceType === 'frontend') {
+      return !!(process.env.FRONTEND_PORT || process.env.PORT);
+    } else {
+      return !!(process.env.BACKEND_PORT || process.env.PORT);
+    }
+  }
+
   get port() {
+    // Try service-specific port first, then fall back to generic PORT
+    if (this._serviceType === 'frontend' && process.env.FRONTEND_PORT) {
+      return parseInt(process.env.FRONTEND_PORT, 10);
+    }
+    if (this._serviceType === 'backend' && process.env.BACKEND_PORT) {
+      return parseInt(process.env.BACKEND_PORT, 10);
+    }
+    // Fall back to PORT (for Kubernetes deployments)
     return parseInt(process.env.PORT, 10);
   }
 

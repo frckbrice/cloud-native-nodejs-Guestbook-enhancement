@@ -1,206 +1,98 @@
-# Guestbook with Cloud Code
+# Guestbook Application - Production-Ready Kubernetes Deployment
 
-This project is a **Google Cloud Kubernetes template** that has been enhanced from the original Guestbook sample. It demonstrates how to deploy a production-ready Kubernetes application with a frontend service, backend API, and MongoDB database using the Cloud Code IDE extension.
+A full-stack guestbook application demonstrating production-ready Kubernetes deployment patterns, persistent storage, and modern DevOps practices. Built with Node.js, Express, MongoDB, and deployed on Kubernetes with comprehensive observability and security features.
 
-## Project Overview
+## Overview
 
-This project started as a basic Google Cloud Kubernetes template and has been systematically enhanced following the roadmap outlined in [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) (starting from line 215). The enhancements transform it from a simple demonstration app into a more production-ready application with modern features and best practices.
+This project showcases a complete three-tier application architecture deployed on Kubernetes:
+- **Frontend**: Node.js/Express web server with Pug templates
+- **Backend**: RESTful API with JWT authentication, WebSocket support, and image upload handling
+- **Database**: MongoDB with persistent storage using StatefulSets
 
-### What We've Built
+### Key Features
 
-This is a full-stack guestbook application that allows users to:
-- **Post messages** with their name and optional images
-- **Upload images** (JPEG, PNG, GIF, WebP) up to 5MB per message
-- **View messages** in reverse chronological order with pagination
-- **Edit and delete** their own messages (with authentication)
-- **Real-time updates** via WebSocket connections (Socket.IO)
-- **User authentication** and authorization (JWT + bcrypt)
-- **Mobile-responsive** design
-- **Monitor application** health and metrics
+- **User Authentication**: JWT-based authentication with bcrypt password hashing
+- **Image Uploads**: Support for JPEG, PNG, GIF, WebP with validation and size limits
+- **Real-time Updates**: WebSocket integration using Socket.IO
+- **Persistent Storage**: StatefulSets with PVCs for database and file storage
+- **Production Infrastructure**: Health checks, Ingress, Network Policies, monitoring
+- **Mobile-Responsive**: Modern, responsive UI design
 
-### Key Enhancements Implemented
+## Technology Stack
 
-Based on the enhancement roadmap, the following features have been added:
+**Backend**: Node.js, Express, MongoDB, Mongoose, JWT, Socket.IO, Multer  
+**Frontend**: Node.js, Express, Pug, Axios, Socket.IO Client  
+**Infrastructure**: Kubernetes, Docker, Skaffold, MongoDB StatefulSet  
+**DevOps**: GitHub Actions, Health Checks, Metrics, Logging
 
-**Production Infrastructure**
-- Health checks (liveness and readiness probes) for all deployments
-- Persistent storage for MongoDB using StatefulSet and PersistentVolumeClaims
-- Ingress controller for production-ready external access (replacing LoadBalancer)
-- Network Policies for enhanced security and traffic control
+## Architecture
 
-**Application Features**
-- User authentication and authorization system (JWT tokens with bcrypt password hashing)
-- Message editing and deletion capabilities
-- Pagination for large message lists
-- Image upload support (multer with file validation and size limits)
-- Real-time updates using WebSockets (Socket.IO)
-- Mobile-responsive design improvements
-- Comprehensive error handling and validation
+**Three-Tier Architecture with Persistent Storage**
 
-**DevOps & Observability**
-- Monitoring and observability with metrics endpoints (`/metrics`)
-- Modular architecture with shared utilities
-- CI/CD pipeline configuration (GitHub Actions)
-- Comprehensive logging and error handling
-- Health check endpoints (`/health`, `/ready`)
-- Docker multi-stage builds for optimization
+- **Frontend**: Stateless web UI (Deployment) exposed via Ingress
+- **Backend**: Stateful API service (StatefulSet) with persistent image storage (5Gi PVC)
+- **MongoDB**: Stateful database (StatefulSet) with persistent data storage (10Gi PVC)
 
-For more detailed information about the project architecture, objectives, and technical stack, see [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md).
+**Key Design Decisions**:
+- StatefulSets for stateful components (database and file storage)
+- PersistentVolumeClaims for data persistence across pod restarts
+- Network Policies for security and traffic control
+- Health checks (liveness/readiness probes) for reliability
 
-For details on how to use this sample as a template in Cloud Code, read the documentation for Cloud Code for [VS Code](https://cloud.google.com/code/docs/vscode/quickstart-local-dev?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-) or [IntelliJ](https://cloud.google.com/code/docs/intellij/quickstart-k8s?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-).
+For comprehensive deployment and architecture details, see [PROJECT_K8_DEPLOYMENT_GUIDE.md](./docs/PROJECT_K8_DEPLOYMENT_GUIDE.md).
 
-### Table of Contents
-* [What's in this sample](#whats-in-this-sample)
-* [Architecture Overview](#architecture-overview)
-* [Getting Started with VS Code](#getting-started-with-vs-code)
-* [Getting Started with IntelliJ](#getting-started-with-intellij)
-* [Project Documentation](#project-documentation)
-* [Sign up for User Research](#sign-up-for-user-research)
+## Quick Start
 
----
-## What's in this sample
+### Prerequisites
+- Kubernetes cluster (Minikube, GKE, EKS, or Docker Desktop)
+- kubectl configured
+- Docker installed
 
-### Kubernetes architecture
-![Kubernetes Architecture Diagram](./img/diagram.png)
+### Deploy to Kubernetes
 
-### Architecture Overview
+```bash
+# Deploy MongoDB StatefulSet
+kubectl apply -f src/backend/kubernetes-manifests/mongo.statefulset.yaml
+kubectl apply -f src/backend/kubernetes-manifests/mongo.service.yaml
 
-This project follows a **three-tier architecture**:
+# Deploy Backend StatefulSet
+kubectl apply -f src/backend/kubernetes-manifests/guestbook-backend.statefulset.yaml
+kubectl apply -f src/backend/kubernetes-manifests/guestbook-backend.service.yaml
 
-1. **Frontend Service** (`src/frontend/`)
-   - Node.js/Express web server serving Pug templates
-   - Handles user interactions and form submissions
-   - Communicates with backend via REST API
-   - Exposed via Ingress controller
+# Deploy Frontend
+kubectl apply -f src/frontend/kubernetes-manifests/
 
-2. **Backend Service** (`src/backend/`)
-   - Node.js/Express API server with RESTful endpoints
-   - Handles authentication (JWT + bcrypt), authorization, and business logic
-   - WebSocket support for real-time updates (Socket.IO)
-   - Image upload handling with multer middleware
-   - Metrics collection and monitoring endpoints
-   - Internal service (ClusterIP) accessible only within cluster
-
-3. **MongoDB Database** (`src/backend/kubernetes-manifests/mongo.*.yaml`)
-   - MongoDB 4 running as StatefulSet
-   - Persistent storage using PersistentVolumeClaims
-   - Internal service (ClusterIP) accessible only within cluster
-
-### Directory Structure
-
-```
-guestbook-1/
-├── src/
-│   ├── frontend/                    # Frontend service
-│   │   ├── app.js                   # Express server
-│   │   ├── views/                   # Pug templates
-│   │   ├── public/                  # Static assets (CSS)
-│   │   ├── utils/                   # Frontend utilities
-│   │   ├── Dockerfile
-│   │   ├── skaffold.yaml
-│   │   └── kubernetes-manifests/    # Frontend K8s resources
-│   │       ├── guestbook-frontend.deployment.yaml
-│   │       ├── guestbook-frontend.service.yaml
-│   │       └── guestbook-frontend.ingress.yaml
-│   │
-│   ├── backend/                     # Backend API service
-│   │   ├── app.js                   # Express server
-│   │   ├── routes/                  # API routes (auth, messages, users)
-│   │   ├── Dockerfile
-│   │   ├── skaffold.yaml
-│   │   └── kubernetes-manifests/    # Backend & DB K8s resources
-│   │       ├── guestbook-backend.deployment.yaml
-│   │       ├── guestbook-backend.service.yaml
-│   │       ├── mongo.statefulset.yaml
-│   │       ├── mongo.service.yaml
-│   │       ├── mongo.pvc.yaml
-│   │       └── network-policy.yaml
-│   │
-│   └── shared/                      # Shared utilities
-│       ├── middleware/              # Authentication, metrics middleware
-│       └── utils/                   # Auth, config, logging, validation, fileUpload, etc.
-│
-├── skaffold.yaml                    # Root Skaffold configuration
-├── Dockerfile                       # Root Dockerfile (if any)
-├── PROJECT_OVERVIEW.md             # Detailed project documentation
-└── docs/                            # Additional documentation
+# Verify deployment
+kubectl get all -l app=nodejs-guestbook
 ```
 
-### Key Kubernetes Resources
+### Using Cloud Code (VS Code/IntelliJ)
 
-- **Frontend Deployment & Service**: Web UI exposed via Ingress
-- **Backend Deployment & Service**: Internal API service (ClusterIP)
-- **MongoDB StatefulSet**: Persistent database with PVC
-- **Ingress**: Production-ready external access (replaces LoadBalancer)
-- **Network Policies**: Security rules for pod-to-pod communication
-- **Health Checks**: Liveness and readiness probes on all deployments
+1. Open project in VS Code or IntelliJ with Cloud Code extension
+2. Click "Run on Kubernetes" from the debug panel
+3. Select your cluster (minikube for local development)
+4. Access the application via the provided URL
 
-### Technology Stack
+For detailed deployment instructions, see [PROJECT_K8_DEPLOYMENT_GUIDE.md](./docs/PROJECT_K8_DEPLOYMENT_GUIDE.md) and [MINIKUBE_&_GKE_EMULATOR_SETUP.md](./docs/MINIKUBE_&_GKE_EMULATOR_SETUP.md).
 
-**Backend Dependencies:**
-- `express` - Web framework
-- `mongoose` - MongoDB ODM
-- `bcrypt` - Password hashing
-- `jsonwebtoken` - JWT authentication
-- `multer` - File upload handling
-- `socket.io` - WebSocket real-time communication
+## Documentation
 
-**Frontend Dependencies:**
-- `express` - Web server
-- `pug` - Template engine
-- `axios` - HTTP client
-- `multer` - File upload handling
-- `form-data` - FormData support
-- `socket.io-client` - WebSocket client
+- **[Kubernetes Deployment Guide](./docs/PROJECT_K8_DEPLOYMENT_GUIDE.md)**: Comprehensive guide to deploying and managing the Kubernetes cluster, including StatefulSet configuration and persistent storage
+- **[Project Overview](./docs/PROJECT_OVERVIEW.md)**: Detailed project architecture, objectives, and technical decisions
+- **[Kubernetes Architecture](./docs/PROJECT_K8_ARCHITECTURE.md)**: Deep dive into Kubernetes concepts, service discovery, health checks, and networking
+- **[Minikube & GKE Emulator Setup](./docs/MINIKUBE_&_GKE_EMULATOR_SETUP.md)**: Setup instructions for local development environments
+- **[Troubleshooting](./docs/TROUBLESHOOTING.md)**: Common issues and solutions
 
-**Infrastructure:**
-- Kubernetes (minikube for local development)
-- Docker containers
-- MongoDB 4 (StatefulSet with persistent storage)
-- Skaffold for development workflow
-- GitHub Actions for CI/CD
+## Key Highlights
 
----
-## Getting Started with VS Code
+**Production-Ready Features**: Persistent storage with StatefulSets and PVCs, health monitoring with liveness and readiness probes, security via Network Policies and JWT authentication, observability with metrics endpoints and comprehensive logging, and scalability designed for horizontal scaling.
 
-### Run the app locally with minikube
+**Technical Achievements**: Migration from ephemeral to persistent storage for both MongoDB and Backend, implementation of StatefulSets for stateful applications, automatic PVC creation via volumeClaimTemplates, and establishment of production-grade deployment patterns.
 
-1. To run your application, click on the Cloud Code status bar and select ‘Run on Kubernetes’.  
-![image](./img/status-bar.png)
+## Additional Resources
 
-2. Select ‘Run locally using minikube’ when prompted. Cloud Code runs your app in a local [minikube](https://minikube.sigs.k8s.io/docs/start/) cluster.  
-![image](./img/create-k8s-cluster.png)
+For details on using this sample as a template in Cloud Code, see the documentation for [Cloud Code for VS Code](https://cloud.google.com/code/docs/vscode/quickstart-local-dev) or [Cloud Code for IntelliJ](https://cloud.google.com/code/docs/intellij/quickstart-k8s).
 
-3. View the build progress in the OUTPUT window. Once the build has finished, click on the front end service's URL in the OUTPUT window to view your live application.  
-![image](./img/kubernetes-guestbook-url.png)
+## License
 
-4.  To stop the application, click the stop icon on the Debug Toolbar.
-
----
-
-## Getting Started with IntelliJ
-
-### Run the app locally with minikube
-
-#### Edit run configuration
-1. Click the configuration dropdown in the top taskbar and then click **Edit Configurations**.
-![image](./img/edit-configurations.png)
-
-   The **Develop on Kubernetes** configuration watches for changes, then uses [skaffold](https://skaffold.dev/docs/) to rebuild and rerun your app. You can customize your deployment by making changes to this run configuration or by creating a new Cloud Code: Kubernetes run configuration.
-
-
-3. Under **Run > Deployment**, select 'Deploy locally to a minikube cluster'.
-![image](./img/run-debug-dialog.png)
-
-4. Click **OK** to save your configuration. 
-
-
-#### Run the app on minikube
-1. Select **Develop on Kubernetes** from the configuration dropdown and click the run icon. Cloud Code runs your app in a local [minikube](ttps://minikube.sigs.k8s.io/docs/start/) cluster.  
-![image](./img/edit-configurations.png)
-
-
-2. View the build process in the output window. When the deployment is successful, you're notified that new service URLs are available. Click the Service URLs tab to view the URL(s), then click the URL link to open your browser with your running application.  
-![image](./img/service-urls.png)
-
-3. To stop the application, click the stop icon next to the configuration dropdown.
+This project is based on the Google Cloud Kubernetes Guestbook sample and has been enhanced with production-ready features. But there is still work to do.

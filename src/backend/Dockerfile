@@ -16,5 +16,8 @@ COPY src/backend/ ./
 # Copy shared utilities to /shared (sibling to /backend)
 COPY src/shared/ /shared/
 
+# Set NODE_PATH so shared utilities can find modules installed in /backend/node_modules
+ENV NODE_PATH=/backend/node_modules
+
 # Run app.js
 ENTRYPOINT ["node", "app.js"]
