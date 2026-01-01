@@ -1,5 +1,7 @@
 # Production-Ready Guestbook Application - Kubernetes Deployment
 
+![Banner Image](./img/results/capture_fe.png)
+
 A full-stack, cloud-native guestbook application demonstrating production-ready Kubernetes deployment patterns, container orchestration, and modern DevOps practices. This project showcases enterprise-level infrastructure management, persistent storage solutions, and comprehensive observability.
 
 > **Based On**: Enhanced version of the [Google Cloud Kubernetes Guestbook sample](https://github.com/GoogleCloudPlatform/cloud-code-samples/blob/v1/nodejs/nodejs-guestbook/README.md) from Google Cloud Platform's cloud-code-samples repository, transformed into a production-ready application with advanced features and best practices.
@@ -213,9 +215,9 @@ kubectl get all -l app=nodejs-guestbook
 kubectl get pvc -l app=nodejs-guestbook
 ```
 
-### Using Cloud Code (VS Code/IntelliJ)
+### Using Cloud Code (VS Code)
 
-1. Open project in VS Code or IntelliJ with Cloud Code extension
+1. Open project in VS Code with Cloud Code extension
 2. Click "Run on Kubernetes" from the debug panel
 3. Select your cluster (minikube for local development)
 4. Access the application via the provided URL
