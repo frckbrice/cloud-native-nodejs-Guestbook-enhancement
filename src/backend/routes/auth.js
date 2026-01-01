@@ -16,14 +16,6 @@ const router = express.Router();
 
 // Register new user
 router.post('/register', errorHandler.asyncHandler(async (req, res) => {
-    // logger.info('POST /auth/register request received', {
-    //     body: {
-    //         username: req.body?.username,
-    //         email: req.body?.email,
-    //         hasPassword: !!req.body?.password
-    // }
-    // });
-
     const { username, email, password } = req.body;
 
     // Validate input
@@ -39,7 +31,6 @@ router.post('/register', errorHandler.asyncHandler(async (req, res) => {
     }
 
     // Validate password strength
-    // logger.info('Validating password strength');
     const passwordValidation = auth.validatePassword(password);
     if (!passwordValidation.valid) {
         logger.warn('Password validation failed', { errors: passwordValidation.errors });
@@ -50,7 +41,6 @@ router.post('/register', errorHandler.asyncHandler(async (req, res) => {
     }
 
     // Check if user already exists (check both username and email separately)
-    // logger.info('Checking if user already exists', { username, email });
     const existingUserByUsername = await User.findByUsername(username);
     const existingUserByEmail = await User.findByEmail(email);
 
@@ -66,11 +56,9 @@ router.post('/register', errorHandler.asyncHandler(async (req, res) => {
     }
 
     // Create user
-    // logger.info('Creating new user', { username, email });
     let user;
     try {
         user = await User.create({ username, email, password });
-        // logger.info('User created successfully', { userId: user.id, username: user.username });
     } catch (createError) {
         logger.error('Failed to create user', {
             error: createError.message,
@@ -87,11 +75,10 @@ router.post('/register', errorHandler.asyncHandler(async (req, res) => {
         logger.error('User created but no ID available', { user });
         throw new Error('Failed to retrieve user ID after creation');
     }
-    logger.info('Generating authentication token', { userId, hasId: !!user.id, has_id: !!user._id });
+    logger.info('Generating authentication token', { userId });
     let token;
     try {
         token = auth.generateToken({ userId, username: user.username, role: user.role });
-        // logger.info('Token generated successfully');
     } catch (tokenError) {
         logger.error('Failed to generate token', {
             error: tokenError.message,
@@ -115,13 +102,6 @@ router.post('/register', errorHandler.asyncHandler(async (req, res) => {
 
 // Login
 router.post('/login', errorHandler.asyncHandler(async (req, res) => {
-    logger.info('POST /auth/login request received', {
-        bodyKeys: Object.keys(req.body || {}),
-        contentType: req.headers['content-type'],
-        hasUsername: !!req.body?.username,
-        hasPassword: !!req.body?.password
-    });
-
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -162,13 +142,7 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
 
     const isValidPassword = await auth.comparePassword(password, user.password);
     if (!isValidPassword) {
-        logger.warn('Password verification failed', {
-            userId: user._id,
-            username: user.username,
-            hasStoredPassword: !!user.password,
-            hashFormat: isValidHashFormat,
-            inputPasswordLength: password ? password.length : 0
-        });
+        logger.warn('Password verification failed');
         const error = new Error('Invalid credentials');
         error.statusCode = 401;
         throw error;

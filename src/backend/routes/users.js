@@ -49,10 +49,6 @@ userSchema.pre('save', async function (next) {
     // Skip if password is already hashed (starts with $2a$, $2b$, or $2y$)
     // This prevents double-hashing if password is already hashed
     if (this.password && /^\$2[aby]\$\d+\$/.test(String(this.password))) {
-        logger.debug('Password already hashed, skipping re-hash', {
-            username: this.username,
-            hashPrefix: String(this.password).substring(0, 10)
-        });
         return next();
     }
 
@@ -63,17 +59,7 @@ userSchema.pre('save', async function (next) {
 
     try {
         const plainPassword = String(this.password);
-        logger.debug('Hashing password for user', {
-            username: this.username,
-            isNew: this.isNew,
-            isModified: this.isModified('password'),
-            passwordLength: plainPassword.length
-        });
         this.password = await auth.hashPassword(plainPassword);
-        logger.debug('Password hashed successfully', {
-            username: this.username,
-            hashPrefix: this.password.substring(0, 10)
-        });
         next();
     } catch (error) {
         logger.error('Password hashing failed in pre-save hook', {
@@ -158,20 +144,6 @@ const findByUsername = async (username) => {
             user = await userModel.findOne({
                 username: { $regex: new RegExp(`^${escapedUsername}$`, 'i') }
             }).lean();
-        }
-
-        if (!user) {
-            logger.debug('User not found by username', {
-                searchedUsername: trimmedUsername,
-                originalUsername: username,
-                dbState: mongoose.connection.readyState
-            });
-        } else {
-            logger.debug('User found by username', {
-                username: user.username,
-                userId: user._id,
-                matchedCase: user.username === trimmedUsername
-            });
         }
 
         return user;

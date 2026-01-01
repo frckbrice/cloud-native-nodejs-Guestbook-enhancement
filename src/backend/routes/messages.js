@@ -128,8 +128,6 @@ const findAll = async (options = {}) => {
         const limit = parseInt(options.limit) || 20;
         const skip = (page - 1) * limit;
 
-        logger.debug('Finding all messages from database', { page, limit, skip });
-
         const query = messageModel.find({})
             .sort({ createdAt: -1 })
             .skip(skip)

@@ -39,7 +39,7 @@ This project showcases a complete three-tier application architecture deployed o
 - Network Policies for security and traffic control
 - Health checks (liveness/readiness probes) for reliability
 
-For comprehensive deployment and architecture details, see [KUBERNETES_DEPLOYMENT_GUIDE.md](./docs/KUBERNETES_DEPLOYMENT_GUIDE.md).
+For comprehensive deployment and architecture details, see [PROJECT_K8_DEPLOYMENT_GUIDE.md](./docs/PROJECT_K8_DEPLOYMENT_GUIDE.md).
 
 ## Quick Start
 
@@ -73,15 +73,15 @@ kubectl get all -l app=nodejs-guestbook
 3. Select your cluster (minikube for local development)
 4. Access the application via the provided URL
 
-For detailed deployment instructions, see [QUICK_START.md](./docs/QUICK_START.md) and [KUBERNETES_DEPLOYMENT_GUIDE.md](./docs/KUBERNETES_DEPLOYMENT_GUIDE.md).
+For detailed deployment instructions, see [PROJECT_K8_DEPLOYMENT_GUIDE.md](./docs/PROJECT_K8_DEPLOYMENT_GUIDE.md) and [MINIKUBE_&_GKE_EMULATOR_SETUP.md](./docs/MINIKUBE_&_GKE_EMULATOR_SETUP.md).
 
 ## Documentation
 
-- **[Kubernetes Deployment Guide](./docs/KUBERNETES_DEPLOYMENT_GUIDE.md)**: Comprehensive guide to deploying and managing the Kubernetes cluster, including StatefulSet configuration and persistent storage
+- **[Kubernetes Deployment Guide](./docs/PROJECT_K8_DEPLOYMENT_GUIDE.md)**: Comprehensive guide to deploying and managing the Kubernetes cluster, including StatefulSet configuration and persistent storage
 - **[Project Overview](./docs/PROJECT_OVERVIEW.md)**: Detailed project architecture, objectives, and technical decisions
-- **[Kubernetes Architecture](./docs/KUBERNETES_ARCHITECTURE.md)**: Deep dive into Kubernetes concepts, service discovery, health checks, and networking
-- **[Quick Start](./docs/QUICK_START.md)**: Fast-track deployment instructions
-- **[Troubleshooting](./docs/DEPLOYMENT_GUIDE.md)**: Common issues and solutions
+- **[Kubernetes Architecture](./docs/PROJECT_K8_ARCHITECTURE.md)**: Deep dive into Kubernetes concepts, service discovery, health checks, and networking
+- **[Minikube & GKE Emulator Setup](./docs/MINIKUBE_&_GKE_EMULATOR_SETUP.md)**: Setup instructions for local development environments
+- **[Troubleshooting](./docs/TROUBLESHOOTING.md)**: Common issues and solutions
 
 ## Key Highlights
 
@@ -95,4 +95,4 @@ For details on using this sample as a template in Cloud Code, see the documentat
 
 ## License
 
-This project is based on the Google Cloud Kubernetes Guestbook sample and has been enhanced with production-ready features.
+This project is based on the Google Cloud Kubernetes Guestbook sample and has been enhanced with production-ready features. But there is still work to do.

@@ -19,29 +19,26 @@ html
             const socket = io(window.location.origin.replace(/:\d+$/, ':8080'));
             
             socket.on('connect', function() {
-                console.log('Connected to real-time updates');
+                // Connected to real-time updates
             });
             
             socket.on('disconnect', function() {
-                console.log('Disconnected from real-time updates');
+                // Disconnected from real-time updates
             });
             
             // Listen for new messages
             socket.on('message:created', function(message) {
-                console.log('New message received:', message);
                 // Reload page to show new message (or implement dynamic insertion)
                 location.reload();
             });
             
             // Listen for message updates
             socket.on('message:updated', function(message) {
-                console.log('Message updated:', message);
                 location.reload();
             });
             
             // Listen for message deletions
             socket.on('message:deleted', function(data) {
-                console.log('Message deleted:', data.id);
                 location.reload();
             });
     body
@@ -206,7 +203,6 @@ html
                 
                 // Function to handle authentication errors
                 function handleAuthError(message) {
-                    console.error('Authentication error:', message);
                     // Clear any invalid tokens
                     document.cookie = 'clientToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
                     // Show login modal
@@ -229,16 +225,12 @@ html
                 // Delete message - use event delegation for dynamically added buttons
                 $(document).on('click', '.delete-btn', function() {
                     const messageId = $(this).data('id');
-                    console.log('Delete button clicked', { messageId: messageId });
                     const token = getAuthToken();
-                    console.log('Auth token retrieved', { hasToken: !!token, tokenLength: token ? token.length : 0 });
                     if (!token) {
-                        console.warn('No auth token found for delete operation');
                         handleAuthError('No authentication token available');
                         return;
                     }
                     if (confirm('Are you sure you want to delete this message?')) {
-                        console.log('Sending DELETE request', { messageId: messageId, url: `/messages/${messageId}` });
                         $.ajax({
                             url: `/messages/${messageId}`,
                             type: 'DELETE',
@@ -246,16 +238,9 @@ html
                                 'Authorization': `Bearer ${token}`
                             },
                             success: function() {
-                                console.log('Message deleted successfully', { messageId: messageId });
                                 location.reload();
                             },
                             error: function(xhr) {
-                                console.error('Delete request failed', { 
-                                    messageId: messageId, 
-                                    status: xhr.status, 
-                                    statusText: xhr.statusText,
-                                    responseText: xhr.responseText
-                                });
                                 if (xhr.status === 401) {
                                     handleAuthError('Authentication failed - token may be expired');
                                 } else {
@@ -272,7 +257,6 @@ html
                     const id = $(this).data('id');
                     const name = $(this).data('name');
                     const body = $(this).data('body');
-                    console.log('Edit button clicked', { messageId: id, name: name });
                     
                     $('#editId').val(id);
                     $('#editName').val(name);
@@ -282,7 +266,6 @@ html
                     function showEditModal() {
                         var $modal = $('#editModal');
                         if (!$modal.length) {
-                            console.error('Edit modal not found');
                             return false;
                         }
                         
@@ -292,7 +275,6 @@ html
                             return true;
                         } catch (e) {
                             // Bootstrap modal not available, use CSS fallback
-                            console.warn('Bootstrap modal not available, using CSS fallback');
                             $modal.css('display', 'block');
                             $modal.addClass('show');
                             $('body').addClass('modal-open');
@@ -346,16 +328,8 @@ html
                     const name = $('#editName').val();
                     const body = $('#editBody').val();
                     const token = getAuthToken();
-                    console.log('Edit form submitted', { 
-                        messageId: id, 
-                        hasToken: !!token,
-                        tokenLength: token ? token.length : 0,
-                        nameLength: name ? name.length : 0,
-                        bodyLength: body ? body.length : 0
-                    });
                     
                     if (!token) {
-                        console.warn('No auth token found for edit operation');
                         handleAuthError('No authentication token available');
                         return;
                     }
@@ -365,15 +339,9 @@ html
                     
                     const imageFile = $('#editImage')[0].files[0];
                     if (imageFile) {
-                        console.log('Including image file in edit', { 
-                            filename: imageFile.name, 
-                            size: imageFile.size,
-                            type: imageFile.type
-                        });
                         formData.append('image', imageFile);
                     }
                     
-                    console.log('Sending PUT request', { url: `/messages/${id}`, hasImage: !!imageFile });
                     $.ajax({
                         url: `/messages/${id}`,
                         type: 'PUT',
@@ -384,7 +352,6 @@ html
                         },
                         data: formData,
                         success: function(response) {
-                            console.log('Message updated successfully', { messageId: id, response: response });
                             // Try Bootstrap modal, fallback to CSS
                             try {
                                 $('#editModal').modal('hide');
@@ -398,12 +365,6 @@ html
                             location.reload();
                         },
                         error: function(xhr) {
-                            console.error('Edit request failed', { 
-                                messageId: id, 
-                                status: xhr.status, 
-                                statusText: xhr.statusText,
-                                responseText: xhr.responseText
-                            });
                             if (xhr.status === 401) {
                                 alert('Please login to edit messages.');
                             } else {

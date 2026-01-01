@@ -38,13 +38,6 @@ app.use('/uploads', errorHandler.asyncHandler(async (req, res) => {
   const imagePath = `/uploads${req.path}`;
   const backendImageUrl = `http://${config.apiAddress}${imagePath}`;
 
-  logger.debug('Proxying image request', {
-    imagePath,
-    backendImageUrl,
-    originalUrl: req.originalUrl,
-    path: req.path
-  });
-
   try {
     const response = await axios.get(backendImageUrl, {
       responseType: 'stream',
@@ -62,20 +55,11 @@ app.use('/uploads', errorHandler.asyncHandler(async (req, res) => {
 
     response.data.pipe(res);
   } catch (error) {
-    // Log 404s at debug level since they're expected when files are missing (e.g., after pod restart)
-    // Only log other errors as warnings
-    if (error.response?.status === 404) {
-      logger.debug('Image not found (expected if file was lost after pod restart)', {
-        imagePath,
-        backendImageUrl
-      });
-    } else {
+    // Only log non-404 errors
+    if (error.response?.status !== 404) {
       logger.warn('Failed to proxy image', {
-        imagePath,
-        backendImageUrl,
         error: error.message,
-        status: error.response?.status,
-        code: error.code
+        status: error.response?.status
       });
     }
     res.status(error.response?.status || 404).send('Image not found');
@@ -157,10 +141,9 @@ const cleanupTempFile = async (file) => {
     try {
       await fsPromises.access(file.path);
       await fsPromises.unlink(file.path);
-      logger.debug('Cleaned up temporary file', { path: file.path });
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        logger.warn('Failed to clean up temporary file', { path: file.path, error: error.message });
+        logger.warn('Failed to clean up temporary file', { error: error.message });
       }
     }
   }
@@ -200,8 +183,6 @@ const generateAndSetCsrfToken = (res) => {
 
 // Handles GET request to /
 router.get('/', errorHandler.asyncHandler(async (req, res) => {
-  logger.info('GET / request received', { query: req.query });
-
   const page = req.query.page || 1;
   const limit = req.query.limit || 20;
   let token = getAuthToken(req);
@@ -216,15 +197,11 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
       });
       if (userResponse.data && userResponse.data.user) {
         currentUser = userResponse.data.user;
-        logger.info('Current user retrieved', { userId: currentUser.id, username: currentUser.username });
       }
     } catch (error) {
-      // Token invalid or expired, clear it and log for debugging
+      // Token invalid or expired, clear it
       logger.warn('Could not get current user', {
-        error: error.message,
-        status: error.response?.status,
-        hasToken: !!token,
-        errorMessage: error.response?.data?.message
+        status: error.response?.status
       });
       // Clear invalid token cookies
       res.clearCookie('token', { path: '/' });
@@ -240,10 +217,6 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
       initialDelay: 1000
     });
 
-    logger.info('Messages retrieved successfully', {
-      count: data.messages.length,
-      pagination: data.pagination
-    });
     const result = util.formatMessages(data.messages);
 
     // Generate and set CSRF token for logout form protection
@@ -276,18 +249,6 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
 
 // Handles POST request to /post
 router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (req, res) => {
-  logger.info('POST /post request received', {
-    hasFile: !!req.file,
-    fileInfo: req.file ? {
-      filename: req.file.filename,
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-      path: req.file.path
-    } : null,
-    bodyFields: Object.keys(req.body)
-  });
-
   const validation = validator.validateMessageData({
     name: req.body.name,
     message: req.body.message
@@ -307,10 +268,6 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
   }
 
   const token = getAuthToken(req);
-  logger.debug('POST /post - Token check', {
-    hasToken: !!token,
-    tokenLength: token ? token.length : 0
-  });
   if (!token) {
     await cleanupTempFile(req.file);
     logger.warn('POST /post - No authentication token provided');
@@ -336,11 +293,6 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
     formData.append('body', validation.data.body);
 
     if (req.file) {
-      logger.info('POST /post - Including image file in request', {
-        filename: req.file.originalname,
-        tempPath: req.file.path,
-        size: req.file.size
-      });
       formData.append('image', fs.createReadStream(req.file.path), {
         filename: req.file.originalname,
         contentType: req.file.mimetype
@@ -349,12 +301,6 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
 
     const headers = formData.getHeaders();
     headers['Authorization'] = `Bearer ${token}`;
-
-    logger.debug('POST /post - Sending request to backend', {
-      url: BACKEND_URI,
-      hasImage: !!req.file,
-      name: validation.data.name
-    });
 
     const response = await axios.post(BACKEND_URI, formData, {
       timeout: 10000,
@@ -373,7 +319,6 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
       initialDelay: 1000
     });
 
-    logger.info('Message posted successfully');
     res.redirect('/');
   } catch (error) {
     // Clean up temporary file on error
@@ -431,20 +376,11 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
 
 // Handles PUT request to /messages/:id (update)
 router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(async (req, res) => {
-  logger.info('PUT /messages/:id request received', {
-    id: req.params.id,
-    hasFile: !!req.file,
-    body: req.body
-  });
-
   const token = getAuthToken(req);
   if (!token) {
     await cleanupTempFile(req.file);
-    logger.warn('PUT /messages/:id - No authentication token provided', { id: req.params.id });
     return res.status(401).json({ error: 'Authentication required' });
   }
-
-  logger.debug('PUT /messages/:id - Token found, validating data', { id: req.params.id });
 
   const validation = validator.validateMessageData({
     name: req.body.name,
@@ -471,10 +407,6 @@ router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(as
     formData.append('body', validation.data.body);
 
     if (req.file) {
-      logger.info('PUT /messages/:id - Including image file in update', {
-        id: req.params.id,
-        filename: req.file.originalname
-      });
       formData.append('image', fs.createReadStream(req.file.path), {
         filename: req.file.originalname,
         contentType: req.file.mimetype
@@ -483,12 +415,6 @@ router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(as
 
     const headers = formData.getHeaders();
     headers['Authorization'] = `Bearer ${token}`;
-
-    logger.debug('PUT /messages/:id - Sending update request to backend', {
-      id: req.params.id,
-      url: `${BACKEND_URI}/${req.params.id}`,
-      hasImage: !!req.file
-    });
 
     const response = await axios.put(`${BACKEND_URI}/${req.params.id}`, formData, {
       timeout: 10000,
@@ -507,7 +433,6 @@ router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(as
       initialDelay: 1000
     });
 
-    logger.info('PUT /messages/:id - Message updated successfully', { id: req.params.id });
     res.status(200).json({ success: true });
   } catch (error) {
     // Clean up temporary file on error
@@ -537,34 +462,13 @@ router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(as
 
 // Handles DELETE request to /messages/:id
 router.delete('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
-  logger.info('DELETE /messages/:id request received', {
-    id: req.params.id,
-    hasCookies: !!req.cookies,
-    cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
-    hasAuthHeader: !!req.headers.authorization
-  });
-
   const token = getAuthToken(req);
-  logger.debug('DELETE /messages/:id - Token extraction', {
-    id: req.params.id,
-    hasToken: !!token,
-    tokenLength: token ? token.length : 0
-  });
 
   if (!token) {
-    logger.warn('DELETE /messages/:id - No authentication token provided', {
-      id: req.params.id,
-      cookies: req.cookies,
-      headers: req.headers
-    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   const deleteMessage = async () => {
-    logger.debug('DELETE /messages/:id - Sending delete request to backend', {
-      id: req.params.id,
-      url: `${BACKEND_URI}/${req.params.id}`
-    });
     const response = await axios.delete(`${BACKEND_URI}/${req.params.id}`, {
       timeout: 5000,
       headers: { 'Authorization': `Bearer ${token}` }
@@ -578,7 +482,6 @@ router.delete('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
       initialDelay: 1000
     });
 
-    logger.info('DELETE /messages/:id - Message deleted successfully', { id: req.params.id });
     res.status(204).send();
   } catch (error) {
     logger.error('DELETE /messages/:id - Failed to delete message', {
@@ -606,14 +509,6 @@ router.delete('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
 
 // Handles POST request to /login
 router.post('/login', errorHandler.asyncHandler(async (req, res) => {
-  logger.info('POST /login request received', {
-    body: req.body,
-    bodyKeys: Object.keys(req.body || {}),
-    contentType: req.headers['content-type'],
-    hasUsername: !!req.body?.username,
-    hasPassword: !!req.body?.password
-  });
-
   // Verify CSRF token
   const csrfTokenFromCookie = req.cookies?.csrfToken;
   const csrfTokenFromForm = req.body._csrf;
@@ -635,11 +530,7 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
-    logger.warn('Login validation failed - missing fields', {
-      hasUsername: !!username,
-      hasPassword: !!password,
-      body: req.body
-    });
+    logger.warn('Login validation failed - missing fields');
     const csrfToken = generateAndSetCsrfToken(res);
     return res.status(400).render('home', {
       messages: [],
@@ -647,12 +538,6 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
       error: 'Username and password are required'
     });
   }
-
-  logger.info('Forwarding login request to backend', {
-    username,
-    backendUri: `${BACKEND_AUTH_URI}/login`,
-    hasPassword: !!password
-  });
 
   try {
     const response = await axios.post(`${BACKEND_AUTH_URI}/login`, {
@@ -683,16 +568,10 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     });
 
-    logger.info('User logged in successfully', { username });
     res.redirect('/');
   } catch (error) {
     logger.error('Login failed', {
-      error: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      code: error.code,
-      stack: error.stack
+      status: error.response?.status
     });
 
     // Try to fetch messages even on login failure for better UX
@@ -725,8 +604,6 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
 
 // Handles POST request to /logout
 router.post('/logout', (req, res) => {
-  logger.info('POST /logout request received');
-
   // Verify CSRF token
   const csrfTokenFromCookie = req.cookies?.csrfToken;
   const csrfTokenFromForm = req.body._csrf;
@@ -754,11 +631,7 @@ router.get('/register', (req, res) => {
 
 // Handles POST request to /register
 router.post('/register', errorHandler.asyncHandler(async (req, res) => {
-  logger.info('POST /register request received');
-
   const { username, email, password } = req.body;
-
-  logger.info('\n\n POST /register request received from client: ', { body: req.body });
 
   if (!username || !email || !password) {
     return res.status(400).render('register', {
@@ -793,16 +666,10 @@ router.post('/register', errorHandler.asyncHandler(async (req, res) => {
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     });
 
-    logger.info('User registered successfully', { username });
     res.redirect('/');
   } catch (error) {
-    // Log full error details for debugging
     logger.error('Registration failed', {
-      error: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      stack: error.stack
+      status: error.response?.status
     });
 
     // Extract error message from response
