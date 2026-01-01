@@ -39,11 +39,11 @@ metadata:
   labels:
     app: nodejs-guestbook
     tier: frontend
-  annotations:
-    # For production, configure SSL/TLS termination
-    # kubernetes.io/ingress.class: "nginx"
-    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  # Annotations for production (uncomment and configure as needed):
+  # annotations:
+  #   kubernetes.io/ingress.class: "nginx"
+  #   cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  #   nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   # For production, uncomment and configure TLS
   # tls:

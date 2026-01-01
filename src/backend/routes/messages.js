@@ -73,6 +73,11 @@ const messageSchema = mongoose.Schema({
         type: String,
         required: false,
         trim: true
+    },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: false
     }
 }, {
     timestamps: true
@@ -81,17 +86,32 @@ const messageSchema = mongoose.Schema({
 const messageModel = mongoose.model('Message', messageSchema);
 
 const construct = (params) => {
-    const { name, body, imageUrl } = params;
-    return new messageModel({ name, body, imageUrl });
+    const { name, body, imageUrl, userId } = params;
+    return new messageModel({ name, body, imageUrl, userId });
 };
 
 const save = async (message) => {
-    logger.debug('Saving message', { name: message.name });
+    logger.debug('Saving message to database', { 
+        name: message.name,
+        bodyLength: message.body ? message.body.length : 0,
+        hasUserId: !!message.userId,
+        hasImageUrl: !!message.imageUrl,
+        messageId: message._id
+    });
     try {
         await message.save();
-        logger.info('Message saved successfully', { messageId: message._id });
+        logger.info('Message saved successfully to database', { 
+            messageId: message._id,
+            name: message.name,
+            userId: message.userId ? message.userId.toString() : null
+        });
     } catch (error) {
-        logger.error('Failed to save message', { error: error.message });
+        logger.error('Failed to save message to database', { 
+            error: error.message,
+            name: message.name,
+            messageId: message._id,
+            stack: error.stack
+        });
         throw error;
     }
 };
@@ -117,6 +137,8 @@ const findAll = async (options = {}) => {
         const limit = parseInt(options.limit) || 20;
         const skip = (page - 1) * limit;
 
+        logger.debug('Finding all messages from database', { page, limit, skip });
+
         const query = messageModel.find({})
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -128,7 +150,13 @@ const findAll = async (options = {}) => {
             messageModel.countDocuments({})
         ]);
 
-        logger.debug('Retrieved messages', { count: messages.length, page, limit, totalCount });
+        logger.info('Retrieved messages from database', { 
+            count: messages.length, 
+            page, 
+            limit, 
+            totalCount,
+            hasMessages: messages.length > 0
+        });
 
         return {
             messages: messages.map(msg => ({
@@ -136,6 +164,7 @@ const findAll = async (options = {}) => {
                 name: msg.name,
                 body: msg.body,
                 imageUrl: msg.imageUrl,
+                userId: msg.userId ? msg.userId.toString() : null,
                 timestamp: msg.createdAt || msg._id.getTimestamp()
             })),
             pagination: {
@@ -171,6 +200,7 @@ const findById = async (id) => {
             name: message.name,
             body: message.body,
             imageUrl: message.imageUrl,
+            userId: message.userId ? message.userId.toString() : null,
             timestamp: message.createdAt || message._id.getTimestamp()
         };
     } catch (error) {
@@ -181,17 +211,38 @@ const findById = async (id) => {
 
 const update = async (id, params) => {
     try {
+        logger.debug('Updating message in database', { 
+            id, 
+            paramsFields: Object.keys(params),
+            hasName: !!params.name,
+            hasBody: !!params.body,
+            hasImageUrl: params.imageUrl !== undefined
+        });
+        
         if (!mongoose.Types.ObjectId.isValid(id)) {
+            logger.warn('Invalid message ID format', { id });
             const error = new Error('Invalid message ID');
             error.name = 'ValidationError';
             throw error;
         }
         const message = await messageModel.findById(id);
         if (!message) {
+            logger.warn('Message not found for update', { id });
             const error = new Error('Message not found');
             error.statusCode = 404;
             throw error;
         }
+        
+        logger.debug('Message found, updating fields', {
+            id,
+            oldName: message.name,
+            newName: params.name || message.name,
+            oldBodyLength: message.body ? message.body.length : 0,
+            newBodyLength: params.body ? params.body.length : 0,
+            oldImageUrl: message.imageUrl,
+            newImageUrl: params.imageUrl
+        });
+        
         message.name = params.name || message.name;
         message.body = params.body || message.body;
         if (params.imageUrl !== undefined) {
@@ -199,34 +250,60 @@ const update = async (id, params) => {
         }
         const validationError = message.validateSync();
         if (validationError) {
+            logger.warn('Message validation failed during update', { 
+                id, 
+                validationErrors: validationError.errors 
+            });
             throw validationError;
         }
         await save(message);
-        logger.info('Message updated successfully', { messageId: id });
+        logger.info('Message updated successfully in database', { 
+            messageId: id,
+            name: message.name,
+            userId: message.userId ? message.userId.toString() : null
+        });
         return message;
     } catch (error) {
-        logger.error('Failed to update message', { id, error: error.message });
+        logger.error('Failed to update message in database', { 
+            id, 
+            error: error.message,
+            errorName: error.name,
+            stack: error.stack
+        });
         throw error;
     }
 };
 
 const remove = async (id) => {
     try {
+        logger.debug('Deleting message from database', { id });
+        
         if (!mongoose.Types.ObjectId.isValid(id)) {
+            logger.warn('Invalid message ID format for deletion', { id });
             const error = new Error('Invalid message ID');
             error.name = 'ValidationError';
             throw error;
         }
         const message = await messageModel.findByIdAndDelete(id);
         if (!message) {
+            logger.warn('Message not found for deletion', { id });
             const error = new Error('Message not found');
             error.statusCode = 404;
             throw error;
         }
-        logger.info('Message deleted successfully', { messageId: id });
+        logger.info('Message deleted successfully from database', { 
+            messageId: id,
+            name: message.name,
+            userId: message.userId ? message.userId.toString() : null
+        });
         return message;
     } catch (error) {
-        logger.error('Failed to delete message', { id, error: error.message });
+        logger.error('Failed to delete message from database', { 
+            id, 
+            error: error.message,
+            errorName: error.name,
+            stack: error.stack
+        });
         throw error;
     }
 };

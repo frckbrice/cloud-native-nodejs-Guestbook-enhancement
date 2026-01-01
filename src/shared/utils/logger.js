@@ -46,21 +46,25 @@ const formatMessage = (level, message, metadata = {}) => {
 
 const logger = {
   error: (message, metadata = {}) => {
-    if (levelValue >= logLevels.ERROR && process.env.NODE_ENV === 'development') {
+    // Always log errors regardless of environment
+    if (levelValue >= logLevels.ERROR) {
       console.error(formatMessage('ERROR', message, metadata));
     }
   },
   warn: (message, metadata = {}) => {
-    if (levelValue >= logLevels.WARN && process.env.NODE_ENV === 'development') {
+    // Always log warnings regardless of environment
+    if (levelValue >= logLevels.WARN) {
       console.warn(formatMessage('WARN', message, metadata));
     }
   },
   info: (message, metadata = {}) => {
-    if (levelValue >= logLevels.INFO && process.env.NODE_ENV === 'development') {
+    // Log info in development or if explicitly enabled
+    if (levelValue >= logLevels.INFO && (process.env.NODE_ENV === 'development' || process.env.ENABLE_INFO_LOGS === 'true')) {
       console.log(formatMessage('INFO', message, metadata));
     }
   },
   debug: (message, metadata = {}) => {
+    // Log debug only in development
     if (levelValue >= logLevels.DEBUG && process.env.NODE_ENV === 'development') {
       console.log(formatMessage('DEBUG', message, metadata));
     }

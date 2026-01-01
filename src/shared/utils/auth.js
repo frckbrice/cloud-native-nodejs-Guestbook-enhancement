@@ -61,9 +61,38 @@ const auth = {
    */
   comparePassword: async (password, hash) => {
     try {
-      return await bcrypt.compare(password, hash);
+      if (!password || !hash) {
+        logger.warn('Password comparison called with missing parameters', {
+          hasPassword: !!password,
+          hasHash: !!hash
+        });
+        return false;
+      }
+
+      // Ensure hash is a string (in case it's stored as something else)
+      const hashString = String(hash);
+
+      // Verify hash format before comparing
+      if (!/^\$2[aby]\$\d+\$/.test(hashString)) {
+        logger.error('Invalid bcrypt hash format', {
+          hashPrefix: hashString.substring(0, 20),
+          hashLength: hashString.length
+        });
+        return false;
+      }
+
+      const result = await bcrypt.compare(password, hashString);
+      logger.debug('Password comparison result', {
+        matches: result,
+        hashPrefix: hashString.substring(0, 10)
+      });
+      return result;
     } catch (error) {
-      logger.error('Password comparison failed', { error: error.message });
+      logger.error('Password comparison failed', {
+        error: error.message,
+        stack: error.stack,
+        hashPrefix: hash ? String(hash).substring(0, 10) : 'none'
+      });
       return false;
     }
   },
@@ -103,7 +132,7 @@ const auth = {
    */
   validatePassword: (password) => {
     const errors = [];
-    
+
     if (!password || password.length < 8) {
       errors.push('Password must be at least 8 characters long');
     }
@@ -124,15 +153,22 @@ const auth = {
   },
 
   /**
-   * Extract token from Authorization header
+   * Extract token from Authorization header or cookies
    * @param {Object} req - Express request object
    * @returns {string|null} - Token or null
    */
   extractToken: (req) => {
+    // Try Authorization header first
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       return authHeader.substring(7);
     }
+
+    // Fallback to cookie
+    if (req.cookies && req.cookies.token) {
+      return req.cookies.token;
+    }
+
     return null;
   }
 };

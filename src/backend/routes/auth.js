@@ -5,7 +5,6 @@
  */
 
 const express = require('express');
-const bodyParser = require('body-parser');
 const User = require('./users');
 const auth = require('../../shared/utils/auth');
 const errorHandler = require('../../shared/utils/errorHandler');
@@ -13,49 +12,99 @@ const logger = require('../../shared/utils/logger');
 const { authenticate } = require('../../shared/middleware/authenticate');
 
 const router = express.Router();
-router.use(bodyParser.json());
+// Note: bodyParser is configured globally in app.js, so we don't need it here
 
 // Register new user
 router.post('/register', errorHandler.asyncHandler(async (req, res) => {
-    logger.info('POST /auth/register request received');
+    logger.info('POST /auth/register request received', {
+        body: {
+            username: req.body?.username,
+            email: req.body?.email,
+            hasPassword: !!req.body?.password
+        }
+    });
 
     const { username, email, password } = req.body;
 
     // Validate input
     if (!username || !email || !password) {
+        logger.warn('Registration validation failed - missing fields', {
+            hasUsername: !!username,
+            hasEmail: !!email,
+            hasPassword: !!password
+        });
         const error = new Error('Username, email, and password are required');
         error.name = 'ValidationError';
         throw error;
     }
 
     // Validate password strength
+    logger.info('Validating password strength');
     const passwordValidation = auth.validatePassword(password);
     if (!passwordValidation.valid) {
+        logger.warn('Password validation failed', { errors: passwordValidation.errors });
         const error = new Error('Password validation failed');
         error.name = 'ValidationError';
         error.details = passwordValidation.errors;
         throw error;
     }
 
-    // Check if user already exists
-    const existingUser = await User.findByUsername(username) || await User.findByEmail(email);
-    if (existingUser) {
+    // Check if user already exists (check both username and email separately)
+    logger.info('Checking if user already exists', { username, email });
+    const existingUserByUsername = await User.findByUsername(username);
+    const existingUserByEmail = await User.findByEmail(email);
+
+    if (existingUserByUsername || existingUserByEmail) {
+        const existingUser = existingUserByUsername || existingUserByEmail;
+        logger.warn('Registration failed - user already exists', {
+            username,
+            email,
+            existingUsername: existingUser.username,
+            existingEmail: existingUser.email,
+            foundByUsername: !!existingUserByUsername,
+            foundByEmail: !!existingUserByEmail
+        });
         const error = new Error('User already exists');
         error.statusCode = 409;
         throw error;
     }
 
     // Create user
-    const user = await User.create({ username, email, password });
-    
-    // Generate token
-    const token = auth.generateToken({ userId: user.id, username: user.username, role: user.role });
+    logger.info('Creating new user', { username, email });
+    let user;
+    try {
+        user = await User.create({ username, email, password });
+        logger.info('User created successfully', { userId: user.id, username: user.username });
+    } catch (createError) {
+        logger.error('Failed to create user', {
+            error: createError.message,
+            stack: createError.stack,
+            code: createError.code,
+            name: createError.name
+        });
+        throw createError;
+    }
 
-    logger.info('User registered successfully', { userId: user.id });
+    // Generate token
+    const userId = user.id ? user.id.toString() : (user._id ? user._id.toString() : null);
+    logger.info('Generating authentication token', { userId, hasId: !!user.id, has_id: !!user._id });
+    let token;
+    try {
+        token = auth.generateToken({ userId, username: user.username, role: user.role });
+        logger.info('Token generated successfully');
+    } catch (tokenError) {
+        logger.error('Failed to generate token', {
+            error: tokenError.message,
+            stack: tokenError.stack
+        });
+        throw tokenError;
+    }
+
+    logger.info('User registered successfully', { userId, username: user.username });
     res.status(201).json({
         message: 'User registered successfully',
         user: {
-            id: user.id,
+            id: userId,
             username: user.username,
             email: user.email,
             role: user.role
@@ -66,44 +115,120 @@ router.post('/register', errorHandler.asyncHandler(async (req, res) => {
 
 // Login
 router.post('/login', errorHandler.asyncHandler(async (req, res) => {
-    logger.info('POST /auth/login request received');
+    logger.info('POST /auth/login request received', {
+        body: req.body,
+        bodyKeys: Object.keys(req.body || {}),
+        contentType: req.headers['content-type'],
+        hasUsername: !!req.body?.username,
+        hasPassword: !!req.body?.password
+    });
 
     const { username, password } = req.body;
 
     if (!username || !password) {
+        logger.warn('Login validation failed - missing fields', {
+            hasUsername: !!username,
+            hasPassword: !!password,
+            body: req.body
+        });
         const error = new Error('Username and password are required');
         error.name = 'ValidationError';
         throw error;
     }
 
-    // Find user
-    const user = await User.findByUsername(username);
+    // Find user - trim username to handle any whitespace issues
+    const trimmedUsername = username ? username.trim() : '';
+    logger.info('Attempting to find user', {
+        originalUsername: username,
+        trimmedUsername: trimmedUsername,
+        usernameLength: trimmedUsername.length,
+        dbState: require('mongoose').connection.readyState
+    });
+
+    // Use findByUsername for case-insensitive lookup
+    const user = await User.findByUsername(trimmedUsername);
+    logger.info('User lookup result', {
+        found: !!user,
+        userId: user?._id,
+        foundUsername: user?.username,
+        searchedUsername: trimmedUsername
+    });
     if (!user) {
+        logger.warn('User not found during login', {
+            username: trimmedUsername,
+            originalUsername: username
+        });
         const error = new Error('Invalid credentials');
         error.statusCode = 401;
         throw error;
     }
+
+    logger.info('User found, verifying password', {
+        userId: user._id,
+        username: user.username,
+        hasStoredPassword: !!user.password,
+        storedPasswordLength: user.password ? user.password.length : 0,
+        storedPasswordPrefix: user.password ? user.password.substring(0, 10) : 'none'
+    });
 
     // Verify password
-    const isValidPassword = await auth.comparePassword(password, user.password);
-    if (!isValidPassword) {
+    if (!user.password) {
+        logger.error('User has no password stored', {
+            userId: user._id,
+            username: user.username
+        });
         const error = new Error('Invalid credentials');
         error.statusCode = 401;
         throw error;
     }
 
+    // Check if password hash looks valid (bcrypt hashes start with $2a$, $2b$, or $2y$)
+    const isValidHashFormat = /^\$2[aby]\$\d+\$/.test(user.password);
+    if (!isValidHashFormat) {
+        logger.error('Invalid password hash format stored in database', {
+            userId: user._id,
+            username: user.username,
+            hashPrefix: user.password.substring(0, 20)
+        });
+        const error = new Error('Invalid credentials');
+        error.statusCode = 401;
+        throw error;
+    }
+
+    logger.debug('Comparing password', {
+        userId: user._id,
+        inputPasswordLength: password ? password.length : 0,
+        hashFormat: 'valid'
+    });
+
+    const isValidPassword = await auth.comparePassword(password, user.password);
+    if (!isValidPassword) {
+        logger.warn('Password verification failed', {
+            userId: user._id,
+            username: user.username,
+            hasStoredPassword: !!user.password,
+            hashFormat: isValidHashFormat,
+            inputPasswordLength: password ? password.length : 0
+        });
+        const error = new Error('Invalid credentials');
+        error.statusCode = 401;
+        throw error;
+    }
+
+    logger.info('Password verified successfully', { userId: user._id, username: user.username });
+
     // Generate token
-    const token = auth.generateToken({ 
-        userId: user._id.toString(), 
-        username: user.username, 
-        role: user.role 
+    const token = auth.generateToken({
+        userId: user._id.toString(),
+        username: user.username,
+        role: user.role
     });
 
     logger.info('User logged in successfully', { userId: user._id });
     res.status(200).json({
         message: 'Login successful',
         user: {
-            id: user._id,
+            id: user._id.toString(),
             username: user.username,
             email: user.email,
             role: user.role
@@ -114,15 +239,64 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
 
 // Get current user
 router.get('/me', authenticate, errorHandler.asyncHandler(async (req, res) => {
-    logger.info('GET /auth/me request received', { userId: req.userId });
+    logger.info('GET /auth/me request received', { userId: req.userId, user: req.user });
+    // Ensure user ID is a string (handle both _id and id fields)
+    const userId = req.user.id ? req.user.id.toString() : (req.user._id ? req.user._id.toString() : req.userId);
     res.status(200).json({
         user: {
-            id: req.user.id,
+            id: userId,
             username: req.user.username,
             email: req.user.email,
             role: req.user.role
         }
     });
+}));
+
+// Diagnostic endpoint to list all users (for debugging - do not expose in production without auth)
+router.get('/diagnostic/users', errorHandler.asyncHandler(async (req, res) => {
+    logger.info('GET /auth/diagnostic/users request received');
+
+    try {
+        const mongoose = require('mongoose');
+        const dbState = mongoose.connection.readyState;
+        const dbStates = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+
+        if (dbState !== 1) {
+            return res.status(503).json({
+                error: 'Database not connected',
+                dbState: dbStates[dbState] || 'unknown',
+                readyState: dbState
+            });
+        }
+
+        const User = require('./users');
+        const users = await User.userModel.find({}).select('-password').lean();
+
+        logger.info('Retrieved users from database', { count: users.length });
+
+        res.status(200).json({
+            dbConnected: true,
+            dbState: dbStates[dbState],
+            userCount: users.length,
+            users: users.map(user => ({
+                id: user._id.toString(),
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt
+            }))
+        });
+    } catch (error) {
+        logger.error('Failed to retrieve users for diagnostic', {
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({
+            error: 'Failed to retrieve users',
+            message: error.message
+        });
+    }
 }));
 
 module.exports = router;
