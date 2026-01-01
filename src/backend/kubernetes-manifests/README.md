@@ -26,7 +26,8 @@ The StatefulSet automatically creates PVCs using `volumeClaimTemplates`. No need
 ## Files
 
 ### Backend
-- `guestbook-backend.deployment.yaml` - Backend application deployment
+- `guestbook-backend.statefulset.yaml` - Backend StatefulSet with persistent storage (✅ USE THIS)
+- `guestbook-backend.deployment.yaml` - Old ephemeral deployment (❌ DO NOT USE)
 - `guestbook-backend.service.yaml` - Backend service
 
 ### Database
@@ -38,18 +39,50 @@ The StatefulSet automatically creates PVCs using `volumeClaimTemplates`. No need
 ### Network
 - `network-policy.yaml` - Network policies for security
 
+## Backend StatefulSet
+
+**IMPORTANT: Backend now uses StatefulSet for persistent storage of uploaded images**
+
+The backend has been migrated from Deployment to StatefulSet to persist uploaded image files across pod restarts. This prevents 404 errors when images are referenced in the database but the actual files are lost.
+
+### Why StatefulSet for Backend?
+
+- **Persistent Storage**: Image files persist across pod restarts and deployments
+- **No More 404 Errors**: Images referenced in MongoDB remain accessible
+- **Production Ready**: Proper file storage solution for user uploads
+
+### Architecture
+
+- **MongoDB StatefulSet**: Stores database data (messages, users, imageUrl references)
+- **Backend StatefulSet**: Stores actual image files in `/app/uploads`
+- **Both work together**: MongoDB has metadata, Backend has files
+
+### Migration
+
+If you're using the old Deployment, migrate to StatefulSet:
+
+```bash
+# Delete old Deployment
+kubectl delete deployment nodejs-guestbook-backend
+
+# Apply StatefulSet
+kubectl apply -f src/backend/kubernetes-manifests/guestbook-backend.statefulset.yaml
+
+# Verify
+kubectl get statefulset nodejs-guestbook-backend
+kubectl get pvc -l app=nodejs-guestbook,tier=backend
+```
+
 ## Skaffold Configuration
 
-The `skaffold.yaml` explicitly lists which manifests to deploy, ensuring only StatefulSet is used:
+The `skaffold.yaml` uses wildcards to deploy all manifests. Ensure you're using StatefulSets:
 
 ```yaml
 manifests:
-  - ./kubernetes-manifests/guestbook-backend.deployment.yaml
-  - ./kubernetes-manifests/guestbook-backend.service.yaml
-  - ./kubernetes-manifests/mongo.statefulset.yaml  #  Only StatefulSet
-  - ./kubernetes-manifests/mongo.service.yaml
-  - ./kubernetes-manifests/network-policy.yaml
+  - ./kubernetes-manifests/*.yaml  # Deploys all YAML files
 ```
+
+**Note**: Make sure `guestbook-backend.deployment.yaml` is not in the directory, or update Skaffold to explicitly list only StatefulSets.
 
 ## Verification
 

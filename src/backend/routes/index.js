@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
+const fs = require('fs').promises;
 const Message = require('./messages');
 const errorHandler = require('../../shared/utils/errorHandler');
 const validator = require('../../shared/utils/validation');
@@ -60,39 +61,38 @@ router.get('/messages', errorHandler.asyncHandler(async (req, res) => {
 
 // Handles GET requests to /messages/:id
 router.get('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
-    logger.info('GET /messages/:id request received', { id: req.params.id });
+    //  logger.info('GET /messages/:id request received', { id: req.params.id });
 
     const message = await Message.findById(req.params.id);
-    logger.info('Message retrieved successfully', { id: req.params.id });
+    // logger.info('Message retrieved successfully', { id: req.params.id });
     res.status(200).json(message);
 }));
 
 // Handles POST requests to /messages with optional image upload (requires authentication)
 router.post('/messages', authenticate, upload.single('image'), errorHandler.asyncHandler(async (req, res) => {
-    logger.info('POST /messages request received', {
-        hasFile: !!req.file,
-        userId: req.userId,
-        userName: req.user?.username,
-        bodyFields: Object.keys(req.body),
-        fileInfo: req.file ? {
-            filename: req.file.filename,
-            originalname: req.file.originalname,
-            mimetype: req.file.mimetype,
-            size: req.file.size
-        } : null
-    });
+    // logger.info('POST /messages request received', {
+    //     hasFile: !!req.file,
+    //     userId: req.userId,
+    //     userName: req.user?.username,
+    //     fileInfo: req.file ? {
+    //         filename: req.file.filename,
+    //         originalname: req.file.originalname,
+    //         mimetype: req.file.mimetype,
+    //         size: req.file.size
+    //     } : null
+    // });
 
     // Helper function to clean up uploaded file
-    const cleanupUploadedFile = () => {
+    const cleanupUploadedFile = async () => {
         if (req.file && req.file.path) {
             try {
-                const fs = require('fs');
-                if (fs.existsSync(req.file.path)) {
-                    fs.unlinkSync(req.file.path);
-                    logger.debug('Cleaned up uploaded file', { path: req.file.path });
-                }
+                await fs.unlink(req.file.path);
+                logger.debug('Cleaned up uploaded file', { path: req.file.path });
             } catch (error) {
-                logger.warn('Failed to clean up uploaded file', { path: req.file.path, error: error.message });
+                // Ignore ENOENT errors (file already deleted)
+                if (error.code !== 'ENOENT') {
+                    logger.warn('Failed to clean up uploaded file', { path: req.file.path, error: error.message });
+                }
             }
         }
     };
@@ -105,7 +105,7 @@ router.post('/messages', authenticate, upload.single('image'), errorHandler.asyn
     const validation = validator.validateMessageData(messageData);
     if (!validation.valid) {
         // Clean up uploaded file if validation fails
-        cleanupUploadedFile();
+        await cleanupUploadedFile();
         const error = new Error('Validation failed');
         error.name = 'ValidationError';
         error.details = validation.errors;
@@ -116,22 +116,22 @@ router.post('/messages', authenticate, upload.single('image'), errorHandler.asyn
     const dataToSave = { ...validation.data, userId: req.userId };
     if (req.file) {
         dataToSave.imageUrl = `/uploads/${req.file.filename}`;
-        logger.info('Image uploaded', { filename: req.file.filename });
+        // logger.info('Image uploaded', { filename: req.file.filename });
     }
 
-    logger.debug('POST /messages - Creating message in database', {
-        name: dataToSave.name,
-        bodyLength: dataToSave.body ? dataToSave.body.length : 0,
-        hasImage: !!dataToSave.imageUrl,
-        userId: req.userId
-    });
+    // logger.debug('POST /messages - Creating message in database', {
+    //     name: dataToSave.name,
+    //     bodyLength: dataToSave.body ? dataToSave.body.length : 0,
+    //     hasImage: !!dataToSave.imageUrl,
+    //     userId: req.userId
+    // });
     const message = await Message.create(dataToSave);
-    logger.info('POST /messages - Message created successfully', {
-        messageId: message._id,
-        userId: req.userId,
-        name: message.name,
-        hasImage: !!message.imageUrl
-    });
+    // logger.info('POST /messages - Message created successfully', {
+    //     messageId: message._id,
+    //     userId: req.userId,
+    //     name: message.name,
+    //     hasImage: !!message.imageUrl
+    // });
 
     const messageResponse = {
         id: message._id,
@@ -150,71 +150,34 @@ router.post('/messages', authenticate, upload.single('image'), errorHandler.asyn
 
 // Handles PUT requests to /messages/:id (update) with optional image upload (requires authentication)
 router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.asyncHandler(async (req, res) => {
-    logger.info('PUT /messages/:id request received', {
-        id: req.params.id,
-        hasFile: !!req.file,
-        userId: req.userId,
-        userName: req.user?.username,
-        bodyFields: Object.keys(req.body),
-        fileInfo: req.file ? {
-            filename: req.file.filename,
-            originalname: req.file.originalname,
-            mimetype: req.file.mimetype,
-            size: req.file.size
-        } : null
-    });
+    // logger.info('PUT /messages/:id request received', {
+    //     id: req.params.id,
+    //     hasFile: !!req.file,
+    //     userId: req.userId,
+    //     userName: req.user?.username,
+    //     bodyFields: Object.keys(req.body),
+    //     fileInfo: req.file ? {
+    //         filename: req.file.filename,
+    //         originalname: req.file.originalname,
+    //         mimetype: req.file.mimetype,
+    //         size: req.file.size
+    //     } : null
+    // });
 
     // Helper function to clean up uploaded file
-    const cleanupUploadedFile = () => {
+    const cleanupUploadedFile = async () => {
         if (req.file && req.file.path) {
             try {
-                const fs = require('fs');
-                if (fs.existsSync(req.file.path)) {
-                    fs.unlinkSync(req.file.path);
-                    logger.debug('Cleaned up uploaded file', { path: req.file.path });
-                }
+                await fs.unlink(req.file.path);
+                logger.debug('Cleaned up uploaded file', { path: req.file.path });
             } catch (error) {
-                logger.warn('Failed to clean up uploaded file', { path: req.file.path, error: error.message });
+                // Ignore ENOENT errors (file already deleted)
+                if (error.code !== 'ENOENT') {
+                    logger.warn('Failed to clean up uploaded file', { path: req.file.path, error: error.message });
+                }
             }
         }
     };
-
-    // Check if message exists and user owns it
-    logger.debug('PUT /messages/:id - Checking message ownership', {
-        id: req.params.id,
-        userId: req.userId
-    });
-    const existingMessageDoc = await Message.messageModel.findById(req.params.id);
-    if (!existingMessageDoc) {
-        cleanupUploadedFile();
-        logger.warn('PUT /messages/:id - Message not found', {
-            id: req.params.id,
-            userId: req.userId
-        });
-        const error = new Error('Message not found');
-        error.statusCode = 404;
-        throw error;
-    }
-
-    logger.debug('PUT /messages/:id - Message found, checking ownership', {
-        id: req.params.id,
-        messageUserId: existingMessageDoc.userId ? existingMessageDoc.userId.toString() : null,
-        requestUserId: req.userId,
-        hasUserId: !!existingMessageDoc.userId
-    });
-
-    // Only allow users to update their own messages
-    if (existingMessageDoc.userId && existingMessageDoc.userId.toString() !== req.userId) {
-        cleanupUploadedFile();
-        logger.warn('PUT /messages/:id - User attempted to update another user\'s message', {
-            id: req.params.id,
-            messageUserId: existingMessageDoc.userId.toString(),
-            requestUserId: req.userId
-        });
-        const error = new Error('Forbidden: You can only update your own messages');
-        error.statusCode = 403;
-        throw error;
-    }
 
     const messageData = {
         name: req.body.name,
@@ -224,7 +187,7 @@ router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.a
     const validation = validator.validateMessageData(messageData);
     if (!validation.valid) {
         // Clean up uploaded file if validation fails
-        cleanupUploadedFile();
+        await cleanupUploadedFile();
         const error = new Error('Validation failed');
         error.name = 'ValidationError';
         error.details = validation.errors;
@@ -235,11 +198,34 @@ router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.a
     const dataToUpdate = { ...validation.data };
     if (req.file) {
         dataToUpdate.imageUrl = `/uploads/${req.file.filename}`;
-        logger.info('Image uploaded for update', { filename: req.file.filename });
+        // logger.info('Image uploaded for update', { filename: req.file.filename });
     }
 
-    const message = await Message.update(req.params.id, dataToUpdate);
-    logger.info('Message updated successfully', { messageId: req.params.id, userId: req.userId });
+    // Atomically update only if user owns the message
+    // logger.debug('PUT /messages/:id - Performing atomic update with ownership check', {
+    //     id: req.params.id,
+    //     userId: req.userId
+    // });
+    const updatedMessage = await Message.messageModel.findOneAndUpdate(
+        { _id: req.params.id, userId: req.userId },
+        dataToUpdate,
+        { new: true, runValidators: true }
+    );
+
+    if (!updatedMessage) {
+        await cleanupUploadedFile();
+        // Could be 404 (not found) or 403 (not owned) - return 404 for security
+        logger.warn('PUT /messages/:id - Message not found or not owned', {
+            id: req.params.id,
+            userId: req.userId
+        });
+        const error = new Error('Message not found');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const message = updatedMessage;
+    // logger.info('Message updated successfully', { messageId: req.params.id, userId: req.userId });
 
     const messageResponse = {
         id: message._id,
@@ -258,20 +244,24 @@ router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.a
 
 // Handles DELETE requests to /messages/:id (requires authentication)
 router.delete('/messages/:id', authenticate, errorHandler.asyncHandler(async (req, res) => {
-    logger.info('DELETE /messages/:id request received', {
-        id: req.params.id,
-        userId: req.userId,
-        userName: req.user?.username
-    });
+    // logger.info('DELETE /messages/:id request received', {
+    //     id: req.params.id,
+    //     userId: req.userId,
+    //     userName: req.user?.username
+    // });
 
-    // Check if message exists and user owns it
-    logger.debug('DELETE /messages/:id - Checking message ownership', {
-        id: req.params.id,
-        userId: req.userId
-    });
-    const existingMessageDoc = await Message.messageModel.findById(req.params.id);
-    if (!existingMessageDoc) {
-        logger.warn('DELETE /messages/:id - Message not found', {
+    // Atomically delete only if user owns the message
+    // logger.debug('DELETE /messages/:id - Performing atomic delete with ownership check', {
+    //     id: req.params.id,
+    //     userId: req.userId
+    // });
+    const deletedMessage = await Message.messageModel.findOneAndDelete(
+        { _id: req.params.id, userId: req.userId }
+    );
+
+    if (!deletedMessage) {
+        // Could be 404 (not found) or 403 (not owned) - return 404 for security
+        logger.warn('DELETE /messages/:id - Message not found or not owned', {
             id: req.params.id,
             userId: req.userId
         });
@@ -280,30 +270,10 @@ router.delete('/messages/:id', authenticate, errorHandler.asyncHandler(async (re
         throw error;
     }
 
-    logger.debug('DELETE /messages/:id - Message found, checking ownership', {
-        id: req.params.id,
-        messageUserId: existingMessageDoc.userId ? existingMessageDoc.userId.toString() : null,
-        requestUserId: req.userId,
-        hasUserId: !!existingMessageDoc.userId
-    });
-
-    // Only allow users to delete their own messages
-    if (existingMessageDoc.userId && existingMessageDoc.userId.toString() !== req.userId) {
-        logger.warn('DELETE /messages/:id - User attempted to delete another user\'s message', {
-            id: req.params.id,
-            messageUserId: existingMessageDoc.userId.toString(),
-            requestUserId: req.userId
-        });
-        const error = new Error('Forbidden: You can only delete your own messages');
-        error.statusCode = 403;
-        throw error;
-    }
-
-    await Message.remove(req.params.id);
     logger.info('DELETE /messages/:id - Message deleted successfully', {
         messageId: req.params.id,
         userId: req.userId,
-        messageName: existingMessageDoc.name
+        hasMessageName: !!deletedMessage.name
     });
 
     // Broadcast real-time update

@@ -66,10 +66,11 @@ function ensureUploadDir(dirPath) {
             fs.unlinkSync(testFile);
             logger.debug('Upload directory is writable', { uploadDir: dirPath });
         } catch (writeError) {
-            logger.warn('Upload directory may not be writable', {
+            logger.error('Upload directory is not writable', {
                 uploadDir: dirPath,
                 error: writeError.message
             });
+            throw new Error(`Upload directory is not writable: ${dirPath}`);
         }
     } catch (error) {
         logger.error('Failed to create upload directory', {
@@ -107,13 +108,13 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => {
         // Generate unique filename: timestamp-random-originalname
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
+        // const ext = path.extname(file.originalname);
         const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
         const filename = `${uniqueSuffix}-${sanitizedName}`;
         logger.debug('File upload filename generated', {
             originalname: file.originalname,
             filename: filename,
-            extension: ext
+            // extension: ext
         });
         cb(null, filename);
     }

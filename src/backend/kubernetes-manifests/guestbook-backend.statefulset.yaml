@@ -1,0 +1,105 @@
+################################################################################
+# Backend StatefulSet with Persistent Storage for Uploads
+#
+# Motivation:
+# The original backend Deployment used emptyDir for uploads, causing image files
+# to be lost on pod restarts. While MongoDB persists the imageUrl references,
+# the actual image files were lost, resulting in 404 errors.
+#
+# Approach:
+# - Replaces Deployment with StatefulSet for stateful application requirements
+# - Uses volumeClaimTemplates for automatic PVC creation per pod
+# - Persists /app/uploads directory across pod restarts
+# - Maintains all existing functionality (init containers, probes, etc.)
+#
+# Why StatefulSet over Deployment:
+# - StatefulSets provide stable persistent storage per pod
+# - Image files persist across pod restarts and deployments
+# - Better suited for applications that need to store files
+# - Stable network identity (though not critical for single replica)
+#
+# Benefits:
+# - Uploaded images persist across pod restarts
+# - No more 404 errors for images after deployments
+# - Production-ready file storage solution
+# - Can be backed by cloud storage (GKE, EKS, AKS) or local storage (Minikube)
+#
+# Architecture:
+# - MongoDB StatefulSet: Stores database (messages, users, imageUrl references)
+# - Backend StatefulSet: Stores actual image files in /app/uploads
+# - Both work together: MongoDB has the metadata, Backend has the files
+#
+# Migration Note:
+# When migrating from Deployment to StatefulSet:
+# 1. Backup any existing uploads (if possible)
+# 2. Delete the old Deployment: kubectl delete deployment nodejs-guestbook-backend
+# 3. Apply the StatefulSet: kubectl apply -f guestbook-backend.statefulset.yaml
+# 4. The service will automatically route to the new StatefulSet pod
+################################################################################
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nodejs-guestbook-backend
+  labels:
+    app: nodejs-guestbook
+    tier: backend
+spec:
+  serviceName: nodejs-guestbook-backend
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nodejs-guestbook
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: nodejs-guestbook
+        tier: backend
+    spec:
+      initContainers:
+      - name: init-db-ready
+        image: mongo:4
+        command: ['/bin/sh', '-c']
+        args:
+          - echo "Waiting for mongodb to start...";until (mongo --host nodejs-guestbook-mongodb:27017 >/dev/null 2>&1) do echo "Waiting for connection for 2 sec."; sleep 2; done
+      containers:
+      - name: backend
+        image: nodejs-guestbook-backend
+        ports:
+        - name: http-server
+          containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+        - name: GUESTBOOK_DB_ADDR
+          value: "nodejs-guestbook-mongodb:27017"
+        - name: UPLOAD_DIR
+          value: "/app/uploads"
+        volumeMounts:
+        - name: uploads-storage
+          mountPath: /app/uploads
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http-server
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http-server
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+  volumeClaimTemplates:
+  - metadata:
+      name: uploads-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+

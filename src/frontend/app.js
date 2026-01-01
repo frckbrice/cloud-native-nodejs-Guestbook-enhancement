@@ -12,10 +12,17 @@ const errorHandler = require('../shared/utils/errorHandler');
 const { retry } = require('../shared/utils/retry');
 const { upload } = require('../shared/utils/fileUpload');
 
+const fs = require('fs');
+const fsPromises = require('fs').promises;
+const FormData = require('form-data');
+const crypto = require('crypto');
+
 const BACKEND_URI = `http://${config.apiAddress}/messages`;
 const BACKEND_HEALTH_URI = `http://${config.apiAddress}/health`;
-const BACKEND_WS_URI = `http://${config.apiAddress}`;
+const BACKEND_WS_URI = `http://${config.apiAddress}/ws`;
 const BACKEND_AUTH_URI = `http://${config.apiAddress}/auth`;
+
+
 
 app.set('view engine', 'pug');
 app.set('views', path.join(__dirname, 'views'));
@@ -55,13 +62,22 @@ app.use('/uploads', errorHandler.asyncHandler(async (req, res) => {
 
     response.data.pipe(res);
   } catch (error) {
-    logger.error('Failed to proxy image', {
-      imagePath,
-      backendImageUrl,
-      error: error.message,
-      status: error.response?.status,
-      code: error.code
-    });
+    // Log 404s at debug level since they're expected when files are missing (e.g., after pod restart)
+    // Only log other errors as warnings
+    if (error.response?.status === 404) {
+      logger.debug('Image not found (expected if file was lost after pod restart)', {
+        imagePath,
+        backendImageUrl
+      });
+    } else {
+      logger.warn('Failed to proxy image', {
+        imagePath,
+        backendImageUrl,
+        error: error.message,
+        status: error.response?.status,
+        code: error.code
+      });
+    }
     res.status(error.response?.status || 404).send('Image not found');
   }
 }));
@@ -135,9 +151,51 @@ process.on('SIGINT', () => {
   });
 });
 
+// Helper function to clean up temp file
+const cleanupTempFile = async (file) => {
+  if (file && file.path) {
+    try {
+      await fsPromises.access(file.path);
+      await fsPromises.unlink(file.path);
+      logger.debug('Cleaned up temporary file', { path: file.path });
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        logger.warn('Failed to clean up temporary file', { path: file.path, error: error.message });
+      }
+    }
+  }
+};
+
+// Helper function to fetch messages
+const fetchMessages = async (page = 1, limit = 20) => {
+  const response = await axios.get(BACKEND_URI, {
+    params: { page, limit },
+    timeout: 5000
+  });
+  return response.data;
+};
+
 // Helper to get auth token from request (cookie or header)
 const getAuthToken = (req) => {
   return req.cookies?.token || req.headers?.authorization?.replace('Bearer ', '') || null;
+};
+
+// Helper to generate CSRF token
+const generateCsrfToken = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+// Helper to generate and set CSRF token cookie, returns the token
+const generateAndSetCsrfToken = (res) => {
+  const csrfToken = generateCsrfToken();
+  res.cookie('csrfToken', csrfToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  });
+  return csrfToken;
 };
 
 // Handles GET request to /
@@ -146,7 +204,7 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
 
   const page = req.query.page || 1;
   const limit = req.query.limit || 20;
-  const token = getAuthToken(req);
+  let token = getAuthToken(req);
   let currentUser = null;
 
   // Get current user if token exists
@@ -176,16 +234,8 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
     }
   }
 
-  const fetchMessages = async () => {
-    const response = await axios.get(BACKEND_URI, {
-      params: { page, limit },
-      timeout: 5000
-    });
-    return response.data;
-  };
-
   try {
-    const data = await retry(fetchMessages, {
+    const data = await retry(() => fetchMessages(page, limit), {
       maxRetries: 3,
       initialDelay: 1000
     });
@@ -195,20 +245,30 @@ router.get('/', errorHandler.asyncHandler(async (req, res) => {
       pagination: data.pagination
     });
     const result = util.formatMessages(data.messages);
+
+    // Generate and set CSRF token for logout form protection
+    const csrfToken = generateAndSetCsrfToken(res);
+
     res.render('home', {
       messages: result,
       pagination: data.pagination,
       currentPage: page,
       currentUser: currentUser,
-      token: token
+      token: token,
+      csrfToken: csrfToken
     });
   } catch (error) {
     logger.error('Failed to retrieve messages', { error: error.message });
+
+    // Generate and set CSRF token even on error
+    const csrfToken = generateAndSetCsrfToken(res);
+
     res.render('home', {
       messages: [],
       pagination: null,
       currentUser: currentUser,
       token: token,
+      csrfToken: csrfToken,
       error: 'Unable to load messages. Please try again later.'
     });
   }
@@ -227,30 +287,6 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
     } : null,
     bodyFields: Object.keys(req.body)
   });
-  const fs = require('fs');
-
-  // Helper function to fetch messages (for error handling)
-  const fetchMessages = async () => {
-    const response = await axios.get(BACKEND_URI, {
-      params: { page: 1, limit: 20 },
-      timeout: 5000
-    });
-    return response.data;
-  };
-
-  // Helper function to clean up temp file
-  const cleanupTempFile = () => {
-    if (req.file && req.file.path) {
-      try {
-        if (fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
-          logger.debug('Cleaned up temporary file', { path: req.file.path });
-        }
-      } catch (error) {
-        logger.warn('Failed to clean up temporary file', { path: req.file.path, error: error.message });
-      }
-    }
-  };
 
   const validation = validator.validateMessageData({
     name: req.body.name,
@@ -258,11 +294,13 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
   });
 
   if (!validation.valid) {
-    cleanupTempFile();
+    await cleanupTempFile(req.file);
     const errorMessages = Object.values(validation.errors).join(', ');
     logger.warn('Validation failed', { errors: validation.errors });
+    const csrfToken = generateAndSetCsrfToken(res);
     res.status(400).render('home', {
       messages: [],
+      csrfToken: csrfToken,
       error: `Validation failed: ${errorMessages}`
     });
     return;
@@ -274,22 +312,24 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
     tokenLength: token ? token.length : 0
   });
   if (!token) {
-    cleanupTempFile();
+    await cleanupTempFile(req.file);
     logger.warn('POST /post - No authentication token provided');
     // Clear any invalid cookies
     res.clearCookie('token');
     res.clearCookie('clientToken');
+    const csrfToken = generateAndSetCsrfToken(res);
     return res.status(401).render('home', {
       messages: [],
       pagination: null,
       currentUser: null,
       token: null,
+      csrfToken: csrfToken,
       error: 'Please login to post a message.'
     });
   }
 
   const postMessage = async () => {
-    const FormData = require('form-data');
+
     const formData = new FormData();
 
     formData.append('name', validation.data.name);
@@ -322,7 +362,7 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
     });
 
     // Clean up temporary file after successful upload
-    cleanupTempFile();
+    await cleanupTempFile(req.file);
 
     return response;
   };
@@ -337,7 +377,7 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
     res.redirect('/');
   } catch (error) {
     // Clean up temporary file on error
-    cleanupTempFile();
+    await cleanupTempFile(req.file);
     logger.error('POST /post - Failed to post message', {
       error: error.message,
       status: error.response?.status,
@@ -352,32 +392,38 @@ router.post('/post', upload.single('image'), errorHandler.asyncHandler(async (re
       res.clearCookie('clientToken');
       // Try to fetch messages without authentication
       try {
-        const data = await retry(fetchMessages, {
+        const data = await retry(() => fetchMessages(1, 20), {
           maxRetries: 3,
           initialDelay: 1000
         });
         const result = util.formatMessages(data.messages);
+        const csrfToken = generateAndSetCsrfToken(res);
         return res.status(401).render('home', {
           messages: result,
           pagination: data.pagination,
           currentPage: 1,
           currentUser: null,
           token: null,
+          csrfToken: csrfToken,
           error: 'Your session has expired. Please login again to post a message.'
         });
       } catch (fetchError) {
+        const csrfToken = generateAndSetCsrfToken(res);
         return res.status(401).render('home', {
           messages: [],
           pagination: null,
           currentUser: null,
           token: null,
+          csrfToken: csrfToken,
           error: 'Your session has expired. Please login again to post a message.'
         });
       }
     }
 
+    const csrfToken = generateAndSetCsrfToken(res);
     res.status(500).render('home', {
       messages: [],
+      csrfToken: csrfToken,
       error: 'Failed to post message. Please try again later.'
     });
   }
@@ -390,25 +436,10 @@ router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(as
     hasFile: !!req.file,
     body: req.body
   });
-  const fs = require('fs');
-
-  // Helper function to clean up temp file
-  const cleanupTempFile = () => {
-    if (req.file && req.file.path) {
-      try {
-        if (fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
-          logger.debug('Cleaned up temporary file', { path: req.file.path });
-        }
-      } catch (error) {
-        logger.warn('Failed to clean up temporary file', { path: req.file.path, error: error.message });
-      }
-    }
-  };
 
   const token = getAuthToken(req);
   if (!token) {
-    cleanupTempFile();
+    await cleanupTempFile(req.file);
     logger.warn('PUT /messages/:id - No authentication token provided', { id: req.params.id });
     return res.status(401).json({ error: 'Authentication required' });
   }
@@ -421,7 +452,7 @@ router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(as
   });
 
   if (!validation.valid) {
-    cleanupTempFile();
+    await cleanupTempFile(req.file);
     logger.warn('PUT /messages/:id - Validation failed', {
       id: req.params.id,
       errors: validation.errors
@@ -465,7 +496,7 @@ router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(as
     });
 
     // Clean up temporary file after successful upload
-    cleanupTempFile();
+    await cleanupTempFile(req.file);
 
     return response;
   };
@@ -480,7 +511,7 @@ router.put('/messages/:id', upload.single('image'), errorHandler.asyncHandler(as
     res.status(200).json({ success: true });
   } catch (error) {
     // Clean up temporary file on error
-    cleanupTempFile();
+    await cleanupTempFile(req.file);
     logger.error('PUT /messages/:id - Failed to update message', {
       id: req.params.id,
       error: error.message,
@@ -583,6 +614,24 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
     hasPassword: !!req.body?.password
   });
 
+  // Verify CSRF token
+  const csrfTokenFromCookie = req.cookies?.csrfToken;
+  const csrfTokenFromForm = req.body._csrf;
+
+  if (!csrfTokenFromCookie || !csrfTokenFromForm || csrfTokenFromCookie !== csrfTokenFromForm) {
+    logger.warn('CSRF token validation failed for login', {
+      hasCookieToken: !!csrfTokenFromCookie,
+      hasFormToken: !!csrfTokenFromForm,
+      tokensMatch: csrfTokenFromCookie === csrfTokenFromForm
+    });
+    const csrfToken = generateAndSetCsrfToken(res);
+    return res.status(403).render('home', {
+      messages: [],
+      csrfToken: csrfToken,
+      error: 'Invalid security token. Please try again.'
+    });
+  }
+
   const { username, password } = req.body;
 
   if (!username || !password) {
@@ -591,8 +640,10 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
       hasPassword: !!password,
       body: req.body
     });
+    const csrfToken = generateAndSetCsrfToken(res);
     return res.status(400).render('home', {
       messages: [],
+      csrfToken: csrfToken,
       error: 'Username and password are required'
     });
   }
@@ -602,15 +653,6 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
     backendUri: `${BACKEND_AUTH_URI}/login`,
     hasPassword: !!password
   });
-
-  // Helper function to fetch messages (for error handling)
-  const fetchMessages = async () => {
-    const response = await axios.get(BACKEND_URI, {
-      params: { page: 1, limit: 20 },
-      timeout: 5000
-    });
-    return response.data;
-  };
 
   try {
     const response = await axios.post(`${BACKEND_AUTH_URI}/login`, {
@@ -632,7 +674,7 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
       path: '/',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     });
-    // Also set non-httpOnly cookie for client-side JavaScript
+
     res.cookie('clientToken', response.data.token, {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
@@ -657,7 +699,7 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
     let messages = [];
     let pagination = null;
     try {
-      const data = await retry(fetchMessages, {
+      const data = await retry(() => fetchMessages(1, 20), {
         maxRetries: 3,
         initialDelay: 1000
       });
@@ -668,12 +710,14 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
     }
 
     const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Login failed. Please check your credentials.';
+    const csrfToken = generateAndSetCsrfToken(res);
     res.status(error.response?.status || 401).render('home', {
       messages: messages,
       pagination: pagination,
       currentPage: 1,
       currentUser: null,
       token: null,
+      csrfToken: csrfToken,
       error: errorMsg
     });
   }
@@ -682,8 +726,24 @@ router.post('/login', errorHandler.asyncHandler(async (req, res) => {
 // Handles POST request to /logout
 router.post('/logout', (req, res) => {
   logger.info('POST /logout request received');
+
+  // Verify CSRF token
+  const csrfTokenFromCookie = req.cookies?.csrfToken;
+  const csrfTokenFromForm = req.body._csrf;
+
+  if (!csrfTokenFromCookie || !csrfTokenFromForm || csrfTokenFromCookie !== csrfTokenFromForm) {
+    logger.warn('CSRF token validation failed for logout', {
+      hasCookieToken: !!csrfTokenFromCookie,
+      hasFormToken: !!csrfTokenFromForm,
+      tokensMatch: csrfTokenFromCookie === csrfTokenFromForm
+    });
+    // Still allow logout but log the security issue
+    // In a production environment, you might want to return an error instead
+  }
+
   res.clearCookie('token');
   res.clearCookie('clientToken');
+  res.clearCookie('csrfToken');
   res.redirect('/');
 });
 

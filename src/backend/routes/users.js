@@ -89,26 +89,12 @@ const userModel = mongoose.model('User', userSchema);
 
 const create = async (userData) => {
     try {
-        logger.debug('Creating user', {
-            username: userData.username,
-            email: userData.email,
-            hasPassword: !!userData.password,
-            passwordLength: userData.password ? userData.password.length : 0
-        });
-
         const user = new userModel(userData);
         await user.save();
 
         // Verify password was hashed correctly
         const passwordHash = user.password;
         const isValidHash = /^\$2[aby]\$\d+\$/.test(passwordHash);
-
-        logger.info('User created successfully', {
-            userId: user._id,
-            username: user.username,
-            passwordHashed: isValidHash,
-            hashPrefix: passwordHash ? passwordHash.substring(0, 10) : 'none'
-        });
 
         return {
             id: user._id,

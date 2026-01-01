@@ -47,7 +47,7 @@ const errorHandler = {
             // Handle duplicate key errors (e.g., username/email already exists)
             if (error.code === 11000 || error.code === 11001) {
                 statusCode = 409;
-                message = 'User already exists';
+                message = error.message || 'Duplicate value detected';
                 errorType = 'ConflictError';
             } else {
                 statusCode = 503;
@@ -69,7 +69,7 @@ const errorHandler = {
         };
 
         // Include validation details if available
-        if (error.details) {
+        if (error.details && errorType === 'ValidationError') {
             errorResponse.details = error.details;
         }
 
@@ -92,7 +92,7 @@ const errorHandler = {
             errorName: error.name,
             errorCode: error.code,
             details: error.details,
-            stack: error.stack,
+            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
             originalMessage: error.message
         });
 

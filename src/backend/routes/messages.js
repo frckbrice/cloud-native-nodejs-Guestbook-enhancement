@@ -91,25 +91,16 @@ const construct = (params) => {
 };
 
 const save = async (message) => {
-    logger.debug('Saving message to database', { 
-        name: message.name,
-        bodyLength: message.body ? message.body.length : 0,
-        hasUserId: !!message.userId,
-        hasImageUrl: !!message.imageUrl,
-        messageId: message._id
-    });
+
     try {
         await message.save();
-        logger.info('Message saved successfully to database', { 
-            messageId: message._id,
-            name: message.name,
-            userId: message.userId ? message.userId.toString() : null
-        });
     } catch (error) {
-        logger.error('Failed to save message to database', { 
+        logger.error('Failed to save message to database', {
             error: error.message,
-            name: message.name,
-            messageId: message._id,
+            hasName: !!message.name,
+            hasUserId: !!message.userId,
+            hasImageUrl: !!message.imageUrl,
+            messageId: message._id.toString(),
             stack: error.stack
         });
         throw error;
@@ -150,10 +141,10 @@ const findAll = async (options = {}) => {
             messageModel.countDocuments({})
         ]);
 
-        logger.info('Retrieved messages from database', { 
-            count: messages.length, 
-            page, 
-            limit, 
+        logger.info('Retrieved messages from database', {
+            count: messages.length,
+            page,
+            limit,
             totalCount,
             hasMessages: messages.length > 0
         });
@@ -211,14 +202,7 @@ const findById = async (id) => {
 
 const update = async (id, params) => {
     try {
-        logger.debug('Updating message in database', { 
-            id, 
-            paramsFields: Object.keys(params),
-            hasName: !!params.name,
-            hasBody: !!params.body,
-            hasImageUrl: params.imageUrl !== undefined
-        });
-        
+
         if (!mongoose.Types.ObjectId.isValid(id)) {
             logger.warn('Invalid message ID format', { id });
             const error = new Error('Invalid message ID');
@@ -232,17 +216,7 @@ const update = async (id, params) => {
             error.statusCode = 404;
             throw error;
         }
-        
-        logger.debug('Message found, updating fields', {
-            id,
-            oldName: message.name,
-            newName: params.name || message.name,
-            oldBodyLength: message.body ? message.body.length : 0,
-            newBodyLength: params.body ? params.body.length : 0,
-            oldImageUrl: message.imageUrl,
-            newImageUrl: params.imageUrl
-        });
-        
+
         message.name = params.name || message.name;
         message.body = params.body || message.body;
         if (params.imageUrl !== undefined) {
@@ -250,22 +224,17 @@ const update = async (id, params) => {
         }
         const validationError = message.validateSync();
         if (validationError) {
-            logger.warn('Message validation failed during update', { 
-                id, 
-                validationErrors: validationError.errors 
+            logger.warn('Message validation failed during update', {
+                id,
+                validationErrors: validationError.errors
             });
             throw validationError;
         }
         await save(message);
-        logger.info('Message updated successfully in database', { 
-            messageId: id,
-            name: message.name,
-            userId: message.userId ? message.userId.toString() : null
-        });
         return message;
     } catch (error) {
-        logger.error('Failed to update message in database', { 
-            id, 
+        logger.error('Failed to update message in database', {
+            id,
             error: error.message,
             errorName: error.name,
             stack: error.stack
@@ -276,8 +245,6 @@ const update = async (id, params) => {
 
 const remove = async (id) => {
     try {
-        logger.debug('Deleting message from database', { id });
-        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             logger.warn('Invalid message ID format for deletion', { id });
             const error = new Error('Invalid message ID');
@@ -291,15 +258,10 @@ const remove = async (id) => {
             error.statusCode = 404;
             throw error;
         }
-        logger.info('Message deleted successfully from database', { 
-            messageId: id,
-            name: message.name,
-            userId: message.userId ? message.userId.toString() : null
-        });
         return message;
     } catch (error) {
-        logger.error('Failed to delete message from database', { 
-            id, 
+        logger.error('Failed to delete message from database', {
+            id,
             error: error.message,
             errorName: error.name,
             stack: error.stack
