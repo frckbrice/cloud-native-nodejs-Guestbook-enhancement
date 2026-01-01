@@ -227,12 +227,11 @@ If you want to extend this project, consider:
 - Adding monitoring and logging
 - Setting up CI/CD pipelines
 
-## NEWs
+## added by me:
 
 we consider adding also: 
 
 - **Add health checks** to all deployments
-- **Set up persistent storage** for MongoDB
 - **Consider using Ingress** instead of LoadBalancer for production
 - **Add Network Policies** for enhanced security
 - **Implement backup strategy** for MongoDB data
