@@ -1,0 +1,35 @@
+################################################################################
+# MongoDB Backup PersistentVolumeClaim
+#
+# Motivation:
+# Provides persistent storage for MongoDB backups created by the backup CronJob.
+# This ensures backups are retained even if the backup pod is deleted.
+#
+# Approach:
+# - Creates a PVC for backup storage
+# - Uses ReadWriteOnce access mode (single pod access)
+# - Configurable storage size (default: 20Gi)
+#
+# Benefits:
+# - Persistent backup storage
+# - Backups survive pod restarts
+# - Configurable storage size
+# - Standard Kubernetes storage pattern
+################################################################################
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-backup-storage
+  labels:
+    app: nodejs-guestbook
+    component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  # storageClassName omitted to use cluster's default storage class
+  # For minikube, this will use 'standard' storage class automatically
+  # For GKE/EKS/AKS, this will use the cluster's default storage class
+

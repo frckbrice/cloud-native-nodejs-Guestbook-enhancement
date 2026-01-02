@@ -4,7 +4,7 @@
 
 A full-stack, cloud-native guestbook application demonstrating production-ready Kubernetes deployment patterns, container orchestration, and modern DevOps practices. This project showcases enterprise-level infrastructure management, persistent storage solutions, and comprehensive observability.
 
-> **Based On**: Enhanced version of the [Google Cloud Kubernetes Guestbook sample](https://github.com/GoogleCloudPlatform/cloud-code-samples/blob/v1/nodejs/nodejs-guestbook/README.md) from Google Cloud Platform's cloud-code-samples repository, transformed into a production-ready application with advanced features and best practices.
+> **Based On**: Enhanced version of the [Google Cloud Kubernetes Guestbook sample](https://github.com/GoogleCloudPlatform/cloud-code-samples/tree/v1/nodejs/nodejs-guestbook) from Google Cloud Platform's cloud-code-samples repository, transformed into a production-ready application with advanced features and best practices.
 
 ## Project Summary
 
