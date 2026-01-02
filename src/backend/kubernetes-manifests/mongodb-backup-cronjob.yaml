@@ -1,0 +1,153 @@
+################################################################################
+# MongoDB Backup CronJob
+#
+# Motivation:
+# Implements automated backup strategy for MongoDB data as mentioned in
+# PROJECT_OVERVIEW.md. This CronJob runs scheduled backups to ensure data
+# can be recovered in case of data loss or corruption.
+#
+# Approach:
+# - Runs backup script on a schedule (default: daily at 2 AM)
+# - Uses mongodump to create compressed backups
+# - Stores backups in persistent volume
+# - Implements retention policy to manage storage
+# - Provides logging for backup operations
+#
+# Benefits:
+# - Automated database backups
+# - Data recovery capability
+# - Configurable schedule and retention
+# - Simple and reliable backup process
+# - No external dependencies (uses built-in mongodump)
+#
+# Configuration:
+# - Schedule: Set via BACKUP_SCHEDULE environment variable (default: "0 2 * * *")
+# - Retention: Set via BACKUP_RETENTION_DAYS environment variable (default: 7 days)
+# - Storage: Uses mongodb-backup-storage PVC (20Gi by default)
+#
+# Usage:
+# Apply this manifest to enable automated backups:
+#   kubectl apply -f mongodb-backup-cronjob.yaml
+#
+# View backup logs:
+#   kubectl logs -l app=nodejs-guestbook,component=backup --tail=50
+#
+# Manual backup trigger:
+#   kubectl create job --from=cronjob/mongodb-backup manual-backup-$(date +%s)
+################################################################################
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongodb-backup
+  labels:
+    app: nodejs-guestbook
+    component: backup
+spec:
+  # Schedule: Daily at 2:00 AM
+  # To customize, edit this value directly (cron format: minute hour day month weekday)
+  schedule: "0 2 * * *"
+  # Keep 3 successful jobs and 1 failed job
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  # Start deadline: 10 minutes
+  startingDeadlineSeconds: 600
+  concurrencyPolicy: Forbid # Don't run concurrent backups
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: nodejs-guestbook
+            component: backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: mongodb-backup
+            # Use MongoDB client image that includes mongodump
+            image: mongo:4
+            command:
+            - /bin/bash
+            - -c
+            - |
+              # Create and run backup script
+              cat > /backup-script.sh << 'EOF'
+              #!/bin/bash
+              set -euo pipefail
+              
+              DB_HOST="${MONGODB_HOST:-nodejs-guestbook-mongodb}"
+              DB_PORT="${MONGODB_PORT:-27017}"
+              DB_NAME="${MONGODB_DB_NAME:-guestbook}"
+              BACKUP_DIR="${BACKUP_DIR:-/backups}"
+              RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_FILE="${BACKUP_DIR}/mongodb-backup-${TIMESTAMP}.archive.gz"
+              LOG_FILE="${BACKUP_DIR}/backup.log"
+              
+              mkdir -p "${BACKUP_DIR}"
+              
+              log() {
+                  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_FILE}"
+              }
+              
+              error_exit() {
+                  log "ERROR: $1"
+                  exit 1
+              }
+              
+              log "Starting MongoDB backup..."
+              log "Database: ${DB_NAME}@${DB_HOST}:${DB_PORT}"
+              log "Backup file: ${BACKUP_FILE}"
+              
+              if mongodump \
+                  --host="${DB_HOST}:${DB_PORT}" \
+                  --db="${DB_NAME}" \
+                  --archive="${BACKUP_FILE}" \
+                  --gzip \
+                  --quiet; then
+                  log "Backup completed successfully: ${BACKUP_FILE}"
+                  BACKUP_SIZE=$(du -h "${BACKUP_FILE}" | cut -f1)
+                  log "Backup size: ${BACKUP_SIZE}"
+              else
+                  error_exit "Backup failed!"
+              fi
+              
+              log "Cleaning up backups older than ${RETENTION_DAYS} days..."
+              find "${BACKUP_DIR}" -name "mongodb-backup-*.archive.gz" -type f -mtime +${RETENTION_DAYS} -delete
+              RETAINED_COUNT=$(find "${BACKUP_DIR}" -name "mongodb-backup-*.archive.gz" -type f | wc -l)
+              log "Retained ${RETAINED_COUNT} backup(s)"
+              
+              log "Current backups:"
+              ls -lh "${BACKUP_DIR}"/mongodb-backup-*.archive.gz 2>/dev/null || log "No backups found"
+              
+              log "Backup process completed successfully"
+              EOF
+              
+              chmod +x /backup-script.sh
+              /backup-script.sh
+            env:
+            - name: MONGODB_HOST
+              value: "nodejs-guestbook-mongodb"
+            - name: MONGODB_PORT
+              value: "27017"
+            - name: MONGODB_DB_NAME
+              value: "guestbook"
+            - name: BACKUP_DIR
+              value: "/backups"
+            - name: BACKUP_RETENTION_DAYS
+              value: "7"
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+            # Resource limits for backup job
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: mongodb-backup-storage
+

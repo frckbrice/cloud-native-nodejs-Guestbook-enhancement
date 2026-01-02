@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs').promises;
+const crypto = require('crypto');
 const Message = require('./messages');
 const errorHandler = require('../../shared/utils/errorHandler');
 const validator = require('../../shared/utils/validation');
@@ -10,6 +11,7 @@ const socketManager = require('../../shared/utils/socketManager');
 const { authenticate } = require('../../shared/middleware/authenticate');
 const { upload, uploadDir } = require('../../shared/utils/fileUpload');
 const { getMetrics } = require('../../shared/middleware/metrics');
+const cache = require('../../shared/utils/cache');
 
 const router = express.Router();
 router.use(bodyParser.json());
@@ -44,18 +46,92 @@ router.get('/ready', async (req, res) => {
     }
 });
 
-// Handles GET requests to /messages with pagination
+// Handles GET requests to /messages with pagination and caching
 router.get('/messages', errorHandler.asyncHandler(async (req, res) => {
-    const result = await Message.findAll({
-        page: req.query.page,
-        limit: req.query.limit
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+
+    // Generate cache key
+    const cacheKey = cache.generateKey('messages', { page, limit });
+
+    // Try to get from cache
+    let result = cache.get(cacheKey);
+
+    if (result) {
+        // Generate ETag from cached data
+        const etag = crypto.createHash('md5').update(JSON.stringify(result)).digest('hex');
+
+        // Check if client has cached version
+        if (req.headers['if-none-match'] === etag) {
+            return res.status(304).end(); // Not Modified
+        }
+
+        // Set cache headers
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'public, max-age=60'); // Cache for 1 minute
+        res.setHeader('X-Cache', 'HIT');
+
+        return res.status(200).json(result);
+    }
+
+    // Cache miss - fetch from database
+    result = await Message.findAll({
+        page,
+        limit
     });
+
+    // Cache the result
+    cache.set(cacheKey, result, 60000); // Cache for 1 minute
+
+    // Generate ETag
+    const etag = crypto.createHash('md5').update(JSON.stringify(result)).digest('hex');
+
+    // Set cache headers
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.setHeader('X-Cache', 'MISS');
+
     res.status(200).json(result);
 }));
 
-// Handles GET requests to /messages/:id
+// Handles GET requests to /messages/:id with caching
 router.get('/messages/:id', errorHandler.asyncHandler(async (req, res) => {
-    const message = await Message.findById(req.params.id);
+    const cacheKey = cache.generateKey('message', { id: req.params.id });
+
+    // Try to get from cache
+    let message = cache.get(cacheKey);
+
+    if (message) {
+        // Generate ETag
+        const etag = crypto.createHash('md5').update(JSON.stringify(message)).digest('hex');
+
+        // Check if client has cached version
+        if (req.headers['if-none-match'] === etag) {
+            return res.status(304).end(); // Not Modified
+        }
+
+        // Set cache headers
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
+        res.setHeader('X-Cache', 'HIT');
+
+        return res.status(200).json(message);
+    }
+
+    // Cache miss - fetch from database
+    message = await Message.findById(req.params.id);
+
+    // Cache the result
+    cache.set(cacheKey, message, 300000); // Cache for 5 minutes
+
+    // Generate ETag
+    const etag = crypto.createHash('md5').update(JSON.stringify(message)).digest('hex');
+
+    // Set cache headers
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('X-Cache', 'MISS');
+
     res.status(200).json(message);
 }));
 
@@ -109,6 +185,9 @@ router.post('/messages', authenticate, upload.single('image'), errorHandler.asyn
 
     // Broadcast real-time update
     socketManager.broadcastMessageCreated(messageResponse);
+
+    // Invalidate cache for messages list
+    cache.invalidateByPrefix('messages:');
 
     res.status(201).json(messageResponse);
 }));
@@ -180,6 +259,10 @@ router.put('/messages/:id', authenticate, upload.single('image'), errorHandler.a
     // Broadcast real-time update
     socketManager.broadcastMessageUpdated(messageResponse);
 
+    // Invalidate cache for this message and messages list
+    cache.delete(cache.generateKey('message', { id: req.params.id }));
+    cache.invalidateByPrefix('messages:');
+
     res.status(200).json(messageResponse);
 }));
 
@@ -202,6 +285,10 @@ router.delete('/messages/:id', authenticate, errorHandler.asyncHandler(async (re
 
     // Broadcast real-time update
     socketManager.broadcastMessageDeleted(req.params.id);
+
+    // Invalidate cache for this message and messages list
+    cache.delete(cache.generateKey('message', { id: req.params.id }));
+    cache.invalidateByPrefix('messages:');
 
     res.status(204).send();
 }));

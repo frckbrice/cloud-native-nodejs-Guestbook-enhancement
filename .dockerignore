@@ -3,3 +3,11 @@
 .idea
 .readmes
 **/node_modules
+**/.git
+**/.gitignore
+**/kubernetes-manifests
+**/skaffold.yaml
+**/Dockerfile
+*.md
+.git
+.gitignore

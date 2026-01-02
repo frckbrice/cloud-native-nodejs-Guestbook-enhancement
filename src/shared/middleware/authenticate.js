@@ -26,7 +26,7 @@ const authenticate = async (req, res, next) => {
 
         logger.debug('Token extracted, verifying', {
             tokenLength: token.length,
-            tokenPrefix: token.substring(0, 20)
+            // tokenPrefix: token.substring(0, 20)
         });
 
         const decoded = auth.verifyToken(token);
